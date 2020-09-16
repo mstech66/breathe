@@ -5,7 +5,7 @@
     <CppWinRTOptimized>true</CppWinRTOptimized>
     <CppWinRTRootNamespaceAutoMerge>true</CppWinRTRootNamespaceAutoMerge>
     <MinimalCoreWin>true</MinimalCoreWin>
-    <ProjectGuid>{1790ac4f-bd3f-4fff-8684-9de4776bc386}</ProjectGuid>
+    <ProjectGuid>{f2c4012d-9feb-4f3b-9745-91df98400605}</ProjectGuid>
     <ProjectName>breathe</ProjectName>
     <RootNamespace>breathe</RootNamespace>
     <DefaultLanguage>en-US</DefaultLanguage>
@@ -16,6 +16,7 @@
     <WindowsTargetPlatformVersion Condition=" '$(WindowsTargetPlatformVersion)' == '' ">10.0.18362.0</WindowsTargetPlatformVersion>
     <WindowsTargetPlatformMinVersion>10.0.16299.0</WindowsTargetPlatformMinVersion>
     <PackageCertificateKeyFile>breathe_TemporaryKey.pfx</PackageCertificateKeyFile>
+    <PackageCertificateThumbprint>3A484F3E119110C499CDCDE62F0F8E094BC52B7B</PackageCertificateThumbprint>
     <PackageCertificatePassword>password</PackageCertificatePassword>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
