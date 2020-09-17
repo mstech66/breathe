@@ -6,14 +6,7 @@ import {
   ActivityIndicator,
   StyleSheet
 } from 'react-native';
-
-
-const styles = StyleSheet.create({
-  todo: {
-    padding: '12px',
-    fontSize: 32
-  }
-});
+import { Checkbox } from '@fluentui/react-native';
 
 class ToDoList extends Component {
 
@@ -34,7 +27,11 @@ class ToDoList extends Component {
     return (
       <View>
         <ActivityIndicator size="large" animating={this.state.loading} />
-        <FlatList data={this.state.todos} renderItem={({ item }) => <Text style={styles.todo} id={item.id}>{item.title}</Text>} />
+        <FlatList data={this.state.todos} renderItem={
+          ({ item }) => <View>
+            <Checkbox label={item.title} />
+          </View>}
+        />
       </View>
     );
   }
