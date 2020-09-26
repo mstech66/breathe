@@ -4,7 +4,8 @@ import { DefaultButton, initializeIcons } from '@fluentui/react';
 
 function showNotification() {
   new Notification("Breathe Reminder", {
-    body: "Time to take deep breaths"
+    body: "Time to take deep breaths",
+    icon: '../build/logo512.png'
   })
 }
 
