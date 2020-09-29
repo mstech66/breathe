@@ -1,0 +1,35 @@
+:root {
+  --mdc-theme-primary: #3ddc84 !important;
+  --mdc-theme-secondary: #00C853 !important;
+}
+
+@font-face {
+  font-family: Roboto;
+  src: url(../fonts/Roboto.ttf);
+}
+
+body {
+  margin: 0;
+  background-color: #fafafa;
+  font-family: 'Roboto';
+}
+
+.title{
+    text-align: center;
+    color: #424242;
+}
+
+.content > *{
+    display: inline;
+}
+
+.main-grid {
+  display: grid;
+  width: 100vw;
+  height: 100vh;
+  place-content: center;
+}
+
+.mdc-snackbar{
+    left: auto !important;
+}

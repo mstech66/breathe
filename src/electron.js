@@ -1,20 +1,45 @@
 const { app, BrowserWindow } = require('electron')
-const path = require('path')
-const url = require('url')
+const { exec } = require('child_process');
+const express = require('express');
+const appExpress = express();
+var bodyParser = require('body-parser');
+appExpress.use(bodyParser.json({ limit: '50mb' }));
+appExpress.use(bodyParser.urlencoded({ limit: '50mb', extended: true, parameterLimit: 50000 }));
+const forever = require('forever-monitor');
+
+function startJob(seconds) {
+  let script = new (forever.Monitor)('src/service.js', {
+    args: [seconds]
+  });
+  script.start();
+}
+
+appExpress.listen(5000, function () {
+  console.log("Server Listening on 5000");
+});
+
+appExpress.get('/', function (req, res) {
+  res.status(200).send();
+});
+
+appExpress.post('/reminder', function (req, res, next) {
+  let seconds = Number(req.body.mins) * 60;
+  startJob(seconds);
+  res.status(200).send();
+});
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 800,
-    height: 600
+    height: 600,
+    webPreferences: {
+      nodeIntegration: false
+    }
   })
 
-  const startUrl = url.format({
-    pathname: path.join(__dirname, '/../build/index.html'),
-    protocol: 'file:',
-    slashes: true
-  });
+  // mainWindow.setMenu(null);
 
-  mainWindow.loadURL(startUrl);
+  mainWindow.loadFile('src/view/index.html');
 }
 
 app.whenReady().then(() => {

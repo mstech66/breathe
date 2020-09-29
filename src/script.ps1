@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $notificationTitle = "Breathe Reminder"
-$notificationSub = "Take a deep breath 😌"
+$notificationSub = "Take a deep breath"
 
 [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
 $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastImageAndText02)
@@ -21,11 +21,9 @@ $toastNode.AppendChild($toastAudio)
 $toastImg = $toastXml.GetElementsByTagName("image")
 $toastTexts = $toastXml.GetElementsByTagName("text")
 
-$toastImg[0].setAttribute("src", "file://$PWD/logo512.png")
+$toastImg[0].setAttribute("src", "file://$PWD/src/images/react.png")
 $toastTexts[0].AppendChild($toastXml.CreateTextNode($notificationTitle)) > $null
 $toastTexts[1].AppendChild($toastXml.CreateTextNode($notificationSub)) > $null
-
-Format-Xml -InputObject $toastXml
 
 #Convert back to WinRT type
 $xml = New-Object Windows.Data.Xml.Dom.XmlDocument

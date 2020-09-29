@@ -1,14 +1,16 @@
-let { Service } = require('node-windows');
-const path = require('path')
+const { exec } = require('child_process');
+const schedule = require('node-schedule');
 
-let svc = new Service({
-    name: "Breathe",
-    description: "Breathe Service",
-    script: "D:\\Projects\\breathe\\build\\notification.js"
-});
+var args = process.argv; //['electron.exe', 'script', 'seconds']
 
-svc.on('install', function () {
-    svc.start();
-});
+callReminder(Number(args[2]));
 
-svc.install();
+function showNotification() {
+  exec("npm run ps");
+}
+
+function callReminder(seconds) {
+  schedule.scheduleJob(`*/${seconds} * * * * *`, function () {
+    showNotification();
+  });
+}
