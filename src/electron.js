@@ -6,9 +6,10 @@ var bodyParser = require('body-parser');
 appExpress.use(bodyParser.json({ limit: '50mb' }));
 appExpress.use(bodyParser.urlencoded({ limit: '50mb', extended: true, parameterLimit: 50000 }));
 const forever = require('forever-monitor');
+let script;
 
 function startJob(seconds) {
-  let script = new (forever.Monitor)('src/service.js', {
+  script = new (forever.Monitor)('src/service.js', {
     args: [seconds]
   });
   script.start();

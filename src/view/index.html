@@ -26,60 +26,67 @@
             </div>
         </div>
         <div class="content">
-            <div class="mdc-select mdc-select--outlined notify">
-                <div class="mdc-select__anchor" aria-labelledby="outlined-select-label">
-                    <span id="demo-selected-text" class="mdc-select__selected-text"></span>
-                    <span class="mdc-select__dropdown-icon">
-                        <svg class="mdc-select__dropdown-icon-graphic" viewBox="7 10 10 5">
-                            <polygon class="mdc-select__dropdown-icon-inactive" stroke="none" fill-rule="evenodd"
-                                points="7 10 12 15 17 10">
-                            </polygon>
-                            <polygon class="mdc-select__dropdown-icon-active" stroke="none" fill-rule="evenodd"
-                                points="7 15 12 10 17 15">
-                            </polygon>
-                        </svg>
-                    </span>
-                    <span class="mdc-notched-outline">
-                        <span class="mdc-notched-outline__leading"></span>
-                        <span class="mdc-notched-outline__notch">
-                            <span id="outlined-select-label" class="mdc-floating-label">Minutes</span>
+            <h1 class="title">Breathe</h1>
+            <div class="inline-controls">
+                <div class="mdc-select mdc-select--outlined notify">
+                    <div class="mdc-select__anchor" aria-labelledby="outlined-select-label">
+                        <span id="demo-selected-text" class="mdc-select__selected-text"></span>
+                        <span class="mdc-select__dropdown-icon">
+                            <svg class="mdc-select__dropdown-icon-graphic" viewBox="7 10 10 5">
+                                <polygon class="mdc-select__dropdown-icon-inactive" stroke="none" fill-rule="evenodd"
+                                    points="7 10 12 15 17 10">
+                                </polygon>
+                                <polygon class="mdc-select__dropdown-icon-active" stroke="none" fill-rule="evenodd"
+                                    points="7 15 12 10 17 15">
+                                </polygon>
+                            </svg>
                         </span>
-                        <span class="mdc-notched-outline__trailing"></span>
-                    </span>
-                </div>
+                        <span class="mdc-notched-outline">
+                            <span class="mdc-notched-outline__leading"></span>
+                            <span class="mdc-notched-outline__notch">
+                                <span id="outlined-select-label" class="mdc-floating-label">Remind every</span>
+                            </span>
+                            <span class="mdc-notched-outline__trailing"></span>
+                        </span>
+                    </div>
 
 
-                <div class="mdc-select__menu mdc-menu mdc-menu-surface mdc-menu-surface--fullwidth">
-                    <ul class="mdc-list">
-                        <li class="mdc-list-item mdc-list-item--selected" data-value="" aria-selected="true">
-                            <span class="mdc-list-item__ripple"></span>
-                        </li>
-                        <li class="mdc-list-item" data-value="20">
-                            <span class="mdc-list-item__ripple"></span>
-                            <span class="mdc-list-item__text">20</span>
-                        </li>
-                        <li class="mdc-list-item" data-value="40">
-                            <span class="mdc-list-item__ripple"></span>
-                            <span class="mdc-list-item__text">40</span>
-                        </li>
-                        <li class="mdc-list-item" data-value="60">
-                            <span class="mdc-list-item__ripple"></span>
-                            <span class="mdc-list-item__text">60</span>
-                        </li>
-                        <li class="mdc-list-item" data-value="80">
-                            <span class="mdc-list-item__ripple"></span>
-                            <span class="mdc-list-item__text">80</span>
-                        </li>
-                        <li class="mdc-list-item" data-value="100">
-                            <span class="mdc-list-item__ripple"></span>
-                            <span class="mdc-list-item__text">100</span>
-                        </li>
-                        <li class="mdc-list-item" data-value="120">
-                            <span class="mdc-list-item__ripple"></span>
-                            <span class="mdc-list-item__text">120</span>
-                        </li>
-                    </ul>
+                    <div class="mdc-select__menu mdc-menu mdc-menu-surface mdc-menu-surface--fullwidth">
+                        <ul class="mdc-list">
+                            <li class="mdc-list-item mdc-list-item--selected" data-value="" aria-selected="true">
+                                <span class="mdc-list-item__ripple"></span>
+                            </li>
+                            <li class="mdc-list-item" data-value="20">
+                                <span class="mdc-list-item__ripple"></span>
+                                <span class="mdc-list-item__text">20 Minutes</span>
+                            </li>
+                            <li class="mdc-list-item" data-value="40">
+                                <span class="mdc-list-item__ripple"></span>
+                                <span class="mdc-list-item__text">40 Minutes</span>
+                            </li>
+                            <li class="mdc-list-item" data-value="60">
+                                <span class="mdc-list-item__ripple"></span>
+                                <span class="mdc-list-item__text">60 Minutes</span>
+                            </li>
+                            <li class="mdc-list-item" data-value="80">
+                                <span class="mdc-list-item__ripple"></span>
+                                <span class="mdc-list-item__text">80 Minutes</span>
+                            </li>
+                            <li class="mdc-list-item" data-value="100">
+                                <span class="mdc-list-item__ripple"></span>
+                                <span class="mdc-list-item__text">100 Minutes</span>
+                            </li>
+                            <li class="mdc-list-item" data-value="120">
+                                <span class="mdc-list-item__ripple"></span>
+                                <span class="mdc-list-item__text">120 Minutes</span>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
+                <button class="mdc-button mdc-button--outlined stopRemindBtn">
+                    <div class="mdc-button__ripple"></div>
+                    <span class="mdc-button__label">Stop Reminders</span>
+                </button>
             </div>
         </div>
     </div>

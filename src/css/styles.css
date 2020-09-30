@@ -1,5 +1,5 @@
 :root {
-  --mdc-theme-primary: #3ddc84 !important;
+  --mdc-theme-primary: #212121 !important;
   --mdc-theme-secondary: #00c853 !important;
 }
 
@@ -16,15 +16,36 @@ body {
 
 .brand {
   display: grid;
-  justify-items: center;
-  margin-bottom: 64px;
+  justify-self: right;
+  margin-right: 100px;
 }
 
 .main-grid {
   display: grid;
   width: 100vw;
   height: 100vh;
-  place-content: center;
+  grid-template: repeat(1, 1fr) / repeat(2, 1fr);
+  place-items: center;
+}
+
+.title{
+  margin-top: 0px;
+  color: #37474F;
+}
+
+.subtitle{
+  margin-bottom: 16px;
+  color: #424242;
+}
+
+.inline-controls {
+  display: grid;
+  grid-template: repeat(1,1fr)/repeat(2,1fr);
+  place-items: center;
+}
+
+.stopRemindBtn{
+  height: 56px !important;
 }
 
 .mdc-snackbar {
@@ -33,7 +54,7 @@ body {
 
 .content {
   display: grid;
-  justify-items: center;
+  justify-self: left;
 }
 
 .flower {
