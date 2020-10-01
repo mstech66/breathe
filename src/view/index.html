@@ -27,6 +27,7 @@
         </div>
         <div class="content">
             <h1 class="title">Breathe</h1>
+            <span class="subtitle">Simple daily breathing reminders</span>
             <div class="inline-controls">
                 <div class="mdc-select mdc-select--outlined notify">
                     <div class="mdc-select__anchor" aria-labelledby="outlined-select-label">
@@ -56,9 +57,9 @@
                             <li class="mdc-list-item mdc-list-item--selected" data-value="" aria-selected="true">
                                 <span class="mdc-list-item__ripple"></span>
                             </li>
-                            <li class="mdc-list-item" data-value="20">
+                            <li class="mdc-list-item" data-value="1">
                                 <span class="mdc-list-item__ripple"></span>
-                                <span class="mdc-list-item__text">20 Minutes</span>
+                                <span class="mdc-list-item__text">1 Minute</span>
                             </li>
                             <li class="mdc-list-item" data-value="40">
                                 <span class="mdc-list-item__ripple"></span>
@@ -111,6 +112,12 @@
         snackbar.open();
     });
 
+    $('.stopRemindBtn').click(function(event){
+        event.preventDefault();
+        $.post("http://127.0.0.1:5000/stop", function (result) { });
+        $('.mdc-snackbar__label').text(`Stopped Reminders`);
+        snackbar.open();
+    })
 </script>
 
 </html>

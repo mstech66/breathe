@@ -5,14 +5,14 @@ const appExpress = express();
 var bodyParser = require('body-parser');
 appExpress.use(bodyParser.json({ limit: '50mb' }));
 appExpress.use(bodyParser.urlencoded({ limit: '50mb', extended: true, parameterLimit: 50000 }));
-const forever = require('forever-monitor');
-let script;
+const pm2 = require('pm2');
 
 function startJob(seconds) {
-  script = new (forever.Monitor)('src/service.js', {
-    args: [seconds]
-  });
-  script.start();
+  pm2.start({ name: 'breathe', script: 'src/service.js', args: [seconds], exec_mode: 'fork' }, function (err, proc) { });
+}
+
+function stopJob() {
+  pm2.stop('breathe', function (err, proc) { })
 }
 
 appExpress.listen(5000, function () {
@@ -26,6 +26,11 @@ appExpress.get('/', function (req, res) {
 appExpress.post('/reminder', function (req, res, next) {
   let seconds = Number(req.body.mins) * 60;
   startJob(seconds);
+  res.status(200).send();
+});
+
+appExpress.post('/stop', function (req, res, next) {
+  stopJob();
   res.status(200).send();
 });
 

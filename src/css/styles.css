@@ -16,8 +16,7 @@ body {
 
 .brand {
   display: grid;
-  justify-self: right;
-  margin-right: 100px;
+  justify-self: center;
 }
 
 .main-grid {
@@ -28,23 +27,25 @@ body {
   place-items: center;
 }
 
-.title{
+.title {
   margin-top: 0px;
-  color: #37474F;
+  margin-bottom: 8px;
+  color: #212121;
 }
 
-.subtitle{
-  margin-bottom: 16px;
-  color: #424242;
+.subtitle {
+  margin-top: 0px;
+  margin-bottom: 24px;
+  color: #363636;
 }
 
 .inline-controls {
   display: grid;
-  grid-template: repeat(1,1fr)/repeat(2,1fr);
+  grid-template: repeat(1, 1fr) / 1fr 2fr;
   place-items: center;
 }
 
-.stopRemindBtn{
+.stopRemindBtn {
   height: 56px !important;
 }
 
@@ -54,7 +55,7 @@ body {
 
 .content {
   display: grid;
-  justify-self: left;
+  justify-self: center;
 }
 
 .flower {
