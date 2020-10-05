@@ -40,11 +40,11 @@ function createWindow() {
     height: 600,
     webPreferences: {
       nodeIntegration: false
-    }
+    },
+    resizable: false
   })
 
-  // mainWindow.setMenu(null);
-
+  mainWindow.setMenu(null);
   mainWindow.loadFile('src/view/index.html');
 }
 

@@ -10,8 +10,9 @@
 
 body {
   margin: 0;
-  background-color: #fafafa;
+  background-color: #FEFEFA;
   font-family: "Roboto";
+  user-select: none;
 }
 
 .brand {
@@ -30,19 +31,21 @@ body {
 .title {
   margin-top: 0px;
   margin-bottom: 8px;
-  color: #212121;
+  font-size: 2rem;
+  color: #424242;
 }
 
 .subtitle {
   margin-top: 0px;
-  margin-bottom: 24px;
-  color: #363636;
+  margin-bottom: 32px;
+  color: #757575;
 }
 
 .inline-controls {
   display: grid;
-  grid-template: repeat(1, 1fr) / 1fr 2fr;
-  place-items: center;
+  grid-template: repeat(1, 1fr) / repeat(2, 1fr);
+  place-items: start;
+  gap: 8px;
 }
 
 .stopRemindBtn {
