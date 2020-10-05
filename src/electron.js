@@ -8,7 +8,7 @@ appExpress.use(bodyParser.urlencoded({ limit: '50mb', extended: true, parameterL
 const pm2 = require('pm2');
 
 function startJob(seconds) {
-  pm2.start({ name: 'breathe', script: 'src/service.js', args: [seconds], exec_mode: 'fork' }, function (err, proc) { });
+  pm2.start({ name: 'breathe', script: 'src/service.js', args: [seconds] }, function (err, proc) { });
 }
 
 function stopJob() {
