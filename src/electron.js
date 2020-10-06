@@ -7,8 +7,8 @@ appExpress.use(bodyParser.json({ limit: '50mb' }));
 appExpress.use(bodyParser.urlencoded({ limit: '50mb', extended: true, parameterLimit: 50000 }));
 const pm2 = require('pm2');
 
-function startJob(seconds) {
-  pm2.start({ name: 'breathe', script: 'src/service.js', args: [seconds] }, function (err, proc) { });
+function startJob(mins) {
+  pm2.start({ name: 'breathe', script: 'src/service.js', args: [mins] }, function (err, proc) { });
 }
 
 function stopJob() {
@@ -24,8 +24,8 @@ appExpress.get('/', function (req, res) {
 });
 
 appExpress.post('/reminder', function (req, res, next) {
-  let seconds = Number(req.body.mins) * 60;
-  startJob(seconds);
+  let mins = Number(req.body.mins);
+  startJob(mins);
   res.status(200).send();
 });
 
