@@ -21,6 +21,8 @@ $toastNode.AppendChild($toastAudio)
 $toastImg = $toastXml.GetElementsByTagName("image")
 $toastTexts = $toastXml.GetElementsByTagName("text")
 
+Write-Output $PWD
+
 $toastImg[0].setAttribute("src", "file://$PWD/src/images/react.png")
 $toastTexts[0].AppendChild($toastXml.CreateTextNode($notificationTitle)) > $null
 $toastTexts[1].AppendChild($toastXml.CreateTextNode($notificationSub)) > $null
