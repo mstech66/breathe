@@ -14,6 +14,9 @@ using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
 using Windows.UI.Notifications;
 using Microsoft.Toolkit.Uwp.Notifications;
+using Windows.ApplicationModel.AppService;
+using BreatheService;
+using System.Diagnostics;
 
 // The Blank Page item template is documented at https://go.microsoft.com/fwlink/?LinkId=402352&clcid=0x409
 
@@ -24,7 +27,8 @@ namespace Breathe
     /// </summary>
     public sealed partial class MainPage : Page
     {
-        private object[] minutesArray = new object[] { "20 Minutes", "40 Minutes", "60 Minutes", "80 Minutes", "100 Minutes" };
+        private object[] minutesArray = new object[] { "2", "40 Minutes", "60 Minutes", "80 Minutes", "100 Minutes" };
+        private AppServiceConnection breatheService;
         public MainPage()
         {
             this.InitializeComponent();
@@ -74,8 +78,36 @@ namespace Breathe
 
         private void TimePickup_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            var selectedValue = this.TimePickup.SelectedValue;
-            generateToast("Breathe", $"Reminder set for {selectedValue}");
+            String selectedValue = this.TimePickup.SelectedValue.ToString();
+            int minutes = Int32.Parse(selectedValue);
+            executeService(minutes);
+        }
+
+        private async void executeService(int selectedValue)
+        {
+            if (this.breatheService == null)
+            {
+                this.breatheService = new AppServiceConnection();
+                this.breatheService.AppServiceName = "com.manthan.breathe";
+                this.breatheService.PackageFamilyName = "e140506b-077a-48fb-ab69-48de0721a30c_ep4mmv0340aq0";
+
+                var status = await this.breatheService.OpenAsync();
+
+                if (status != AppServiceConnectionStatus.Success)
+                {
+                    Console.WriteLine("Failed to Connect");
+                    return;
+                }
+            }
+
+            var message = new ValueSet();
+            message.Add("timeOut", selectedValue);
+            AppServiceResponse response = await this.breatheService.SendMessageAsync(message);
+
+            if (response.Message["Status"] as string == "OK")
+            {
+                Console.WriteLine("Successfully Sent!");
+            }
         }
     }
 }
