@@ -6,7 +6,8 @@
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
   xmlns:uap4="http://schemas.microsoft.com/appx/manifest/uap/windows10/4"
-  IgnorableNamespaces="uap mp">
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap mp rescap">
 
   <Identity
     Name="e140506b-077a-48fb-ab69-48de0721a30c"
@@ -43,14 +44,17 @@
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
       </uap:VisualElements>
       <Extensions>
-        <uap:Extension Category="windows.appService" EntryPoint="BreatheService.BreatheServ">
-          <uap3:AppService Name="com.manthan.breathe" uap4:SupportsMultipleInstances="true"/>
-        </uap:Extension>
+        <Extension Category="windows.backgroundTasks" EntryPoint="BreatheService.BreatheTask">
+          <BackgroundTasks>
+            <Task Type="pushNotification"/>
+          </BackgroundTasks>
+        </Extension>
       </Extensions>
     </Application>
   </Applications>
 
   <Capabilities>
     <Capability Name="internetClient" />
+    <rescap:Capability Name="extendedBackgroundTaskTime"/>
   </Capabilities>
 </Package>

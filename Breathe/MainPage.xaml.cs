@@ -17,6 +17,8 @@ using Microsoft.Toolkit.Uwp.Notifications;
 using Windows.ApplicationModel.AppService;
 using BreatheService;
 using System.Diagnostics;
+using Windows.ApplicationModel.Background;
+using Windows.UI.Popups;
 
 // The Blank Page item template is documented at https://go.microsoft.com/fwlink/?LinkId=402352&clcid=0x409
 
@@ -27,8 +29,7 @@ namespace Breathe
     /// </summary>
     public sealed partial class MainPage : Page
     {
-        private object[] minutesArray = new object[] { "2", "40 Minutes", "60 Minutes", "80 Minutes", "100 Minutes" };
-        private AppServiceConnection breatheService;
+        private object[] minutesArray = new object[] { "15 Minutes", "20 Minutes", "30 Minutes", "40 Minutes", "60 Minutes", "80 Minutes", "100 Minutes" };
         public MainPage()
         {
             this.InitializeComponent();
@@ -73,40 +74,57 @@ namespace Breathe
 
         private void StopRemindersButton_Click(object sender, RoutedEventArgs e)
         {
-            generateToast("Breathe Reminder", "Take a deep breath");
+            cancelTask();
         }
 
         private void TimePickup_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             String selectedValue = this.TimePickup.SelectedValue.ToString();
-            int minutes = Int32.Parse(selectedValue);
+            string[] splitValues = selectedValue.Split(" ");
+            UInt32 minutes = UInt32.Parse(splitValues[0]);
             executeService(minutes);
         }
 
-        private async void executeService(int selectedValue)
+        private async void executeService(UInt32 selectedValue)
         {
-            if (this.breatheService == null)
+            var taskName = "BreatheTask";
+            var taskRegistered = false;
+
+            foreach (var task in BackgroundTaskRegistration.AllTasks)
             {
-                this.breatheService = new AppServiceConnection();
-                this.breatheService.AppServiceName = "com.manthan.breathe";
-                this.breatheService.PackageFamilyName = "e140506b-077a-48fb-ab69-48de0721a30c_ep4mmv0340aq0";
-
-                var status = await this.breatheService.OpenAsync();
-
-                if (status != AppServiceConnectionStatus.Success)
+                if (task.Value.Name == taskName)
                 {
-                    Console.WriteLine("Failed to Connect");
-                    return;
+                    taskRegistered = true;
+                    break;
                 }
             }
 
-            var message = new ValueSet();
-            message.Add("timeOut", selectedValue);
-            AppServiceResponse response = await this.breatheService.SendMessageAsync(message);
-
-            if (response.Message["Status"] as string == "OK")
+            if (!taskRegistered)
             {
-                Console.WriteLine("Successfully Sent!");
+                var builder = new BackgroundTaskBuilder();
+                builder.Name = taskName;
+                builder.TaskEntryPoint = "BreatheService.BreatheTask";
+                builder.SetTrigger(new TimeTrigger(selectedValue, false));
+
+                await BackgroundExecutionManager.RequestAccessAsync();
+
+                BackgroundTaskRegistration task = builder.Register();
+
+                MessageDialog msg = new MessageDialog("Background Task successfully registered!");
+                await msg.ShowAsync();
+            }
+        }
+
+        private void cancelTask()
+        {
+            var taskName = "BreatheTask";
+
+            foreach (var task in BackgroundTaskRegistration.AllTasks)
+            {
+                if (task.Value.Name == taskName)
+                {
+                    task.Value.Unregister(true);
+                }
             }
         }
     }
