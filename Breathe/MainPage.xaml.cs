@@ -110,12 +110,12 @@ namespace Breathe
 
                 BackgroundTaskRegistration task = builder.Register();
 
-                MessageDialog msg = new MessageDialog("Background Task successfully registered!");
+                MessageDialog msg = new MessageDialog("Reminder Set Successfully!");
                 await msg.ShowAsync();
             }
         }
 
-        private void cancelTask()
+        private async void cancelTask()
         {
             var taskName = "BreatheTask";
 
@@ -124,6 +124,8 @@ namespace Breathe
                 if (task.Value.Name == taskName)
                 {
                     task.Value.Unregister(true);
+                    MessageDialog msg = new MessageDialog("Reminder Removed Successfully!");
+                    await msg.ShowAsync();
                 }
             }
         }

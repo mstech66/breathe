@@ -12,7 +12,7 @@
   <Identity
     Name="e140506b-077a-48fb-ab69-48de0721a30c"
     Publisher="CN=Manthan"
-    Version="1.0.0.0" />
+    Version="1.0.2.0" />
 
   <mp:PhoneIdentity PhoneProductId="e140506b-077a-48fb-ab69-48de0721a30c" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
