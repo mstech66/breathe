@@ -45,9 +45,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: app-v__VERSION__
+          tagName: v__VERSION__
           releaseName: 'Breathe v__VERSION__'
-          releaseBody: 'Mindful desktop reminders for Windows.'
-          releaseDraft: true
+          releaseBody: 'Mindful desktop reminders for Windows and macOS.'
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
