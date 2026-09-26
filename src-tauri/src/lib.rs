@@ -4,8 +4,14 @@ use tauri::{
     Manager, WindowEvent,
 };
 
+/// Shows a system notification. Errors are returned to the frontend so failures
+/// are visible instead of silently dropped.
 #[tauri::command]
-fn trigger_native_toast(app: tauri::AppHandle, title: String, body: String) {
+async fn trigger_native_toast(
+    app: tauri::AppHandle,
+    title: String,
+    body: String,
+) -> Result<(), String> {
     #[cfg(windows)]
     {
         use std::path::PathBuf;
@@ -25,7 +31,7 @@ fn trigger_native_toast(app: tauri::AppHandle, title: String, body: String) {
             toast = toast.icon(&icon_path, IconCrop::Circular, "Breathe");
         }
 
-        let _ = toast
+        toast
             .on_activated(move |action| {
                 if let Some(window) = app_handle.get_webview_window("main") {
                     let _ = window.show();
@@ -39,21 +45,44 @@ fn trigger_native_toast(app: tauri::AppHandle, title: String, body: String) {
                 }
                 Ok(())
             })
-            .show();
+            .show()
+            .map_err(|e| format!("Windows couldn't show the notification: {e}"))?;
     }
 
-    #[cfg(not(windows))]
+    // macOS: call notify-rust (UNUserNotificationCenter backend) directly rather than
+    // through the plugin, which discards errors.
+    #[cfg(target_os = "macos")]
+    {
+        let _ = &app;
+        // Returns immediately once the user has answered the permission prompt.
+        let granted = notify_rust::request_auth()
+            .await
+            .map_err(|e| format!("Couldn't request notification permission: {e}"))?;
+        if !granted {
+            return Err("macOS isn't allowing notifications from Breathe. Check System Settings → Notifications → Breathe.".into());
+        }
+
+        notify_rust::Notification::new()
+            .summary(&title)
+            .body(&body)
+            .sound_name("Glass") // built-in system sound; silent without one
+            .show_async()
+            .await
+            .map_err(|e| format!("macOS refused the notification: {e}"))?;
+    }
+
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     {
         use tauri_plugin_notification::NotificationExt;
-        let builder = app.notification().builder().title(title).body(body);
-
-        // macOS notifications are silent unless a sound name is given.
-        // "Glass" is a built-in system sound (/System/Library/Sounds).
-        #[cfg(target_os = "macos")]
-        let builder = builder.sound("Glass");
-
-        let _ = builder.show();
+        app.notification()
+            .builder()
+            .title(title)
+            .body(body)
+            .show()
+            .map_err(|e| e.to_string())?;
     }
+
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

@@ -26,6 +26,7 @@
   --focus: #16804A;                          /* 4.6:1; white on it 5.0:1 */
   --rest: #0A6E8A;                           /* 5.3:1; white on it 5.8:1 */
   --paused: #B25000;                         /* white on it 5.2:1 */
+  --error: #C4281C;                          /* 5.2:1 */
   --on-accent: #FFFFFF;
 
   --accent: var(--focus);
@@ -56,6 +57,7 @@
     --focus: #3DD68C;                        /* 10.1:1; dark label on it 9.8:1 */
     --rest: #5AC8E0;                         /* 9.7:1 */
     --paused: #FFB340;
+    --error: #FF6961;                        /* 6.7:1 */
     --on-accent: #04180D;
 
     --flower-a: #3DD68C;
@@ -475,6 +477,18 @@ body {
 
 .list-row + .list-row {
   border-top: 1px solid var(--separator);
+}
+
+.notify-status {
+  margin-top: -16px; /* sit close to the list above, not a full section gap */
+  padding: 0 12px;
+  font-size: 12px;
+  color: var(--label-secondary);
+  user-select: text;
+}
+
+.notify-status.error {
+  color: var(--error);
 }
 
 /* Switch */

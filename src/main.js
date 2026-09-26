@@ -123,6 +123,7 @@ function playChime(type = 'bell') {
 }
 
 // Native Notification Dispatcher
+// Resolves to null on success, or an error message the UI can show.
 async function triggerNotification(title, body) {
   // 1. Tauri native Rust backend
   if (window.__TAURI__ && window.__TAURI__.core) {
@@ -131,16 +132,19 @@ async function triggerNotification(title, body) {
         title: title || '🌿 Breathe Reminder',
         body: body || 'Time to pause, release tension, and take a deep breath.'
       });
-      return;
+      return null;
     } catch (e) {
-      console.warn('Tauri invoke error:', e);
+      console.warn('Notification failed:', e);
+      return String(e);
     }
   }
 
   // 2. Browser fallback
   if ('Notification' in window && Notification.permission === 'granted') {
     new Notification(title, { body });
+    return null;
   }
+  return 'Notifications are not available here.';
 }
 
 // Time Formatter
@@ -391,11 +395,16 @@ breatheNowBtn.addEventListener('click', () => {
   }, 4000);
 });
 
-testNotifyBtn.addEventListener('click', () => {
-  triggerNotification(
+const notifyStatusEl = document.getElementById('notifyStatus');
+
+testNotifyBtn.addEventListener('click', async () => {
+  const error = await triggerNotification(
     '🌿 Breathe Reminder',
     'Notifications are active! Current rhythm: ' + document.querySelector('.mode-tab.active').textContent
   );
+  notifyStatusEl.textContent = error || 'Test notification sent.';
+  notifyStatusEl.classList.toggle('error', Boolean(error));
+  notifyStatusEl.hidden = false;
 });
 
 soundToggle.addEventListener('change', (e) => {
