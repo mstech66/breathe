@@ -1,14 +1,15 @@
-use std::path::PathBuf;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter, Manager, WindowEvent,
+    Manager, WindowEvent,
 };
 
 #[tauri::command]
 fn trigger_native_toast(app: tauri::AppHandle, title: String, body: String) {
     #[cfg(windows)]
     {
+        use std::path::PathBuf;
+        use tauri::Emitter;
         use tauri_winrt_notification::{IconCrop, Scenario, Sound, Toast};
         let app_handle = app.clone();
         let mut toast = Toast::new("com.breathe.desktop");
@@ -62,6 +63,14 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![trigger_native_toast])
         .setup(|app| {
+            // UNUserNotificationCenter shows nothing until the user grants permission,
+            // so ask once at launch (macOS only prompts the first time).
+            // Errors in `tauri dev`, where there is no .app bundle; safe to ignore.
+            #[cfg(target_os = "macos")]
+            tauri::async_runtime::spawn(async {
+                let _ = notify_rust::request_auth().await;
+            });
+
             let show_item = MenuItem::with_id(app, "show", "Open Breathe", true, None::<&str>)?;
             let sep = PredefinedMenuItem::separator(app)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;

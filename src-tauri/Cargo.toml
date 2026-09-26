@@ -26,6 +26,12 @@ tauri-plugin-notification = "2"
 [target.'cfg(windows)'.dependencies]
 tauri-winrt-notification = "0.7.3"
 
+# Same notify-rust the notification plugin uses; this feature switches it on macOS
+# from the deprecated NSUserNotificationCenter (lands silently in Notification Center
+# on recent macOS) to UNUserNotificationCenter.
+[target.'cfg(target_os = "macos")'.dependencies]
+notify-rust = { version = "4.18", default-features = false, features = ["preview-macos-un"] }
+
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
