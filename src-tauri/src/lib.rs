@@ -44,12 +44,14 @@ fn trigger_native_toast(app: tauri::AppHandle, title: String, body: String) {
     #[cfg(not(windows))]
     {
         use tauri_plugin_notification::NotificationExt;
-        let _ = app
-            .notification()
-            .builder()
-            .title(title)
-            .body(body)
-            .show();
+        let builder = app.notification().builder().title(title).body(body);
+
+        // macOS notifications are silent unless a sound name is given.
+        // "Glass" is a built-in system sound (/System/Library/Sounds).
+        #[cfg(target_os = "macos")]
+        let builder = builder.sound("Glass");
+
+        let _ = builder.show();
     }
 }
 

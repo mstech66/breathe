@@ -14,10 +14,10 @@ let remainingSeconds = workMinutes * 60;
 let isPaused = false;
 let soundEnabled = true;
 let timerId = null;
+let lastTickAt = Date.now();
 
 // DOM Elements
 const appShell = document.querySelector('.app-shell');
-const modeBadge = document.getElementById('modeBadge');
 const modeTabs = document.querySelectorAll('.mode-tab');
 const modeDescription = document.getElementById('modeDescription');
 const statusDotEl = document.getElementById('statusDot');
@@ -25,6 +25,8 @@ const statusTextEl = document.getElementById('statusText');
 const cycleCountEl = document.getElementById('cycleCount');
 const countdownValEl = document.getElementById('countdownVal');
 const countdownLabelEl = document.getElementById('countdownLabel');
+const progressEl = document.getElementById('progress');
+const progressFillEl = document.getElementById('progressFill');
 const microIntervalGroup = document.getElementById('microIntervalGroup');
 const chips = document.querySelectorAll('.chip');
 
@@ -39,18 +41,18 @@ const soundToggle = document.getElementById('soundToggle');
 
 const guidePhaseEl = document.getElementById('guidePhase');
 const guideSubtextEl = document.getElementById('guideSubtext');
-const ergoIconEl = document.getElementById('ergoIcon');
+const flowerEl = document.getElementById('flower');
 const ergoTextEl = document.getElementById('ergoText');
 
 // WFH Ergonomic Health & Posture Prompts
 const ergoTips = [
-  { icon: '🧘', text: 'Drop your shoulders away from your ears' },
-  { icon: '💧', text: 'Drink a glass of water to hydrate your brain' },
-  { icon: '👁️', text: 'Look 20 feet away to relax your eye muscles' },
-  { icon: '🦷', text: 'Unclench your jaw and soften your forehead' },
-  { icon: '🚶', text: 'Stand up and gently stretch your hamstrings' },
-  { icon: '🪑', text: 'Check your posture: feet flat, back supported' },
-  { icon: '🌬️', text: 'Take a long, slow belly breath through your nose' }
+  'Drop your shoulders away from your ears',
+  'Drink a glass of water',
+  'Look at something 20 feet away for 20 seconds',
+  'Unclench your jaw and soften your forehead',
+  'Stand up and gently stretch your hamstrings',
+  'Check your posture: feet flat, back supported',
+  'Take a long, slow belly breath through your nose'
 ];
 
 let tipIndex = 0;
@@ -58,8 +60,7 @@ setInterval(() => {
   tipIndex = (tipIndex + 1) % ergoTips.length;
   ergoTextEl.style.opacity = '0';
   setTimeout(() => {
-    ergoIconEl.textContent = ergoTips[tipIndex].icon;
-    ergoTextEl.textContent = ergoTips[tipIndex].text;
+    ergoTextEl.textContent = ergoTips[tipIndex];
     ergoTextEl.style.opacity = '1';
   }, 300);
 }, 12000);
@@ -149,6 +150,20 @@ function formatTime(totalSeconds) {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
+function phaseTotalSeconds() {
+  if (currentMode === 'micro') return microMinutes * 60;
+  return (currentPhase === 'work' ? workMinutes : breakMinutes) * 60;
+}
+
+// Countdown + progress bar
+function renderTime() {
+  countdownValEl.textContent = formatTime(remainingSeconds);
+  const total = phaseTotalSeconds();
+  const pct = Math.min(100, Math.max(0, ((total - remainingSeconds) / total) * 100));
+  progressFillEl.style.width = `${pct}%`;
+  progressEl.setAttribute('aria-valuenow', Math.round(pct));
+}
+
 // Switch Session Phase (Work <-> Break)
 function transitionPhase() {
   if (currentMode === 'micro') {
@@ -198,24 +213,42 @@ function transitionPhase() {
 }
 
 // Timer Tick
+// Intervals get throttled or suspended when the window is minimized/hidden,
+// so count real elapsed wall-clock time instead of assuming 1s per tick.
 function tick() {
-  if (isPaused) return;
-
-  if (remainingSeconds > 0) {
-    remainingSeconds--;
-    countdownValEl.textContent = formatTime(remainingSeconds);
-  } else {
-    transitionPhase();
-    countdownValEl.textContent = formatTime(remainingSeconds);
+  const now = Date.now();
+  if (isPaused) {
+    lastTickAt = now;
+    return;
   }
+
+  const elapsed = Math.floor((now - lastTickAt) / 1000);
+  if (elapsed <= 0) return;
+  lastTickAt += elapsed * 1000; // keep the sub-second remainder
+
+  if (elapsed >= remainingSeconds) {
+    // Carry any overshoot into the next phase (at most one transition per tick)
+    const overshoot = elapsed - remainingSeconds;
+    transitionPhase();
+    remainingSeconds = Math.max(0, remainingSeconds - overshoot);
+  } else {
+    remainingSeconds -= elapsed;
+  }
+  renderTime();
 }
 
 // Start Timer
 function startTimer() {
   if (timerId) clearInterval(timerId);
-  countdownValEl.textContent = formatTime(remainingSeconds);
+  lastTickAt = Date.now();
+  renderTime();
   timerId = setInterval(tick, 1000);
 }
+
+// Catch up immediately when the window is restored
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) tick();
+});
 
 // Mode Selection Handler
 function applyMode(mode) {
@@ -227,35 +260,28 @@ function applyMode(mode) {
     workMinutes = 50;
     breakMinutes = 10;
     remainingSeconds = workMinutes * 60;
-    modeBadge.textContent = '50/10 Rhythm';
-    modeDescription.textContent = '50 minutes deep focus followed by a 10-minute restorative break';
+    modeDescription.textContent = '50 min focus, then a 10 min break';
     statusTextEl.textContent = 'Focus Session Active';
     countdownLabelEl.textContent = 'until 10-minute break';
-    microIntervalGroup.style.display = 'none';
-    skipPhaseBtn.style.display = 'flex';
-    skipBtnText.textContent = 'Start Break Early';
   } else if (mode === '25-5') {
     workMinutes = 25;
     breakMinutes = 5;
     remainingSeconds = workMinutes * 60;
-    modeBadge.textContent = 'Pomodoro (25/5)';
-    modeDescription.textContent = '25 minutes focused sprint followed by a 5-minute breathing break';
+    modeDescription.textContent = '25 min sprint, then a 5 min break';
     statusTextEl.textContent = 'Pomodoro Sprint';
     countdownLabelEl.textContent = 'until 5-minute break';
-    microIntervalGroup.style.display = 'none';
-    skipPhaseBtn.style.display = 'flex';
-    skipBtnText.textContent = 'Start Break Early';
   } else if (mode === 'micro') {
     remainingSeconds = microMinutes * 60;
-    modeBadge.textContent = 'Micro-Pause';
-    modeDescription.textContent = 'Gentle periodic reminders for quick 60-second breathing resets';
+    modeDescription.textContent = 'A gentle reminder to pause and take a few breaths';
     statusTextEl.textContent = 'Mindful Reminders';
     countdownLabelEl.textContent = 'until next breathing pause';
-    microIntervalGroup.style.display = 'block';
-    skipPhaseBtn.style.display = 'none';
   }
 
-  countdownValEl.textContent = formatTime(remainingSeconds);
+  microIntervalGroup.hidden = mode !== 'micro';
+  skipPhaseBtn.hidden = mode === 'micro';
+  skipBtnText.textContent = 'Start Break Early';
+
+  renderTime();
 }
 
 // Pause / Resume Toggle
@@ -269,24 +295,25 @@ function togglePause() {
     toggleBtnText.textContent = 'Resume Timer';
     toggleIconPath.setAttribute('d', 'M8 5v14l11-7z');
   } else {
+    lastTickAt = Date.now(); // don't count paused time
     statusDotEl.classList.remove('paused');
-    statusTextEl.textContent = currentPhase === 'work' ? 'Focus Session Active' : 'Rest & Recharge Break';
+    statusTextEl.textContent = statusTextEl.textContent.replace(' (Paused)', '');
     toggleBtn.classList.remove('paused');
     toggleBtnText.textContent = 'Pause Session';
     toggleIconPath.setAttribute('d', 'M6 19h4V5H6v14zm8-14v14h4V5h-4z');
   }
 }
 
-// Breathing Pacing Guide Cycles (9s full cycle)
+// Breathing guide, driven by the flower animation so the words match the motion.
+// Each alternate iteration of the flower is one half-breath (expand = in, contract = out).
 const phases = [
-  { text: 'Inhale deeply', subtext: 'Fill your lungs and expand your chest' },
-  { text: 'Hold gently', subtext: 'Feel the stillness within' },
-  { text: 'Exhale slowly', subtext: 'Release all tension and soften your shoulders' },
-  { text: 'Rest peacefully', subtext: 'Calm mind, steady body' }
+  { text: 'Breathe in', subtext: 'Slowly, through your nose' },
+  { text: 'Breathe out', subtext: 'Let your shoulders soften' }
 ];
 
 let currentPhaseIdx = 0;
-setInterval(() => {
+flowerEl.addEventListener('animationiteration', (e) => {
+  if (e.target !== flowerEl) return; // ignore bubbling from the circles
   currentPhaseIdx = (currentPhaseIdx + 1) % phases.length;
   guidePhaseEl.style.opacity = '0';
   guideSubtextEl.style.opacity = '0';
@@ -296,26 +323,55 @@ setInterval(() => {
     guideSubtextEl.textContent = phases[currentPhaseIdx].subtext;
     guidePhaseEl.style.opacity = '1';
     guideSubtextEl.style.opacity = '1';
-  }, 400);
-}, 4500);
+  }, 250);
+});
+
+// Segmented controls: one thumb per control that slides under the active segment
+function syncThumb(group, animate = true) {
+  const thumb = group.querySelector('.segmented-thumb');
+  const active = group.querySelector('button.active');
+  if (!thumb || !active) return;
+  if (!animate) group.classList.add('no-anim');
+  thumb.style.width = `${active.offsetWidth}px`;
+  thumb.style.transform = `translateX(${active.offsetLeft}px)`;
+  if (!animate) {
+    void thumb.offsetWidth; // commit position before re-enabling transitions
+    group.classList.remove('no-anim');
+  }
+}
+
+document.querySelectorAll('.segmented').forEach(group => {
+  const thumb = document.createElement('span');
+  thumb.className = 'segmented-thumb';
+  thumb.setAttribute('aria-hidden', 'true');
+  group.prepend(thumb);
+  // Also covers the first layout and un-hiding the Micro-Pause interval group
+  new ResizeObserver(() => syncThumb(group, false)).observe(group);
+});
 
 // Event Listeners
 modeTabs.forEach(tab => {
   tab.addEventListener('click', () => {
-    modeTabs.forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
+    modeTabs.forEach(t => {
+      t.classList.toggle('active', t === tab);
+      t.setAttribute('aria-pressed', t === tab);
+    });
+    syncThumb(tab.parentElement);
     applyMode(tab.dataset.mode);
   });
 });
 
 chips.forEach(chip => {
   chip.addEventListener('click', () => {
-    chips.forEach(c => c.classList.remove('active'));
-    chip.classList.add('active');
+    chips.forEach(c => {
+      c.classList.toggle('active', c === chip);
+      c.setAttribute('aria-pressed', c === chip);
+    });
+    syncThumb(chip.parentElement);
 
     microMinutes = parseInt(chip.dataset.minutes, 10);
     remainingSeconds = microMinutes * 60;
-    countdownValEl.textContent = formatTime(remainingSeconds);
+    renderTime();
   });
 });
 
@@ -323,13 +379,13 @@ toggleBtn.addEventListener('click', togglePause);
 
 skipPhaseBtn.addEventListener('click', () => {
   transitionPhase();
-  countdownValEl.textContent = formatTime(remainingSeconds);
+  renderTime();
 });
 
 breatheNowBtn.addEventListener('click', () => {
   playChime('bell');
   const originalText = breatheNowBtn.querySelector('span').textContent;
-  breatheNowBtn.querySelector('span').textContent = 'Breathe in rhythm...';
+  breatheNowBtn.querySelector('span').textContent = 'Breathe in rhythm…';
   setTimeout(() => {
     breatheNowBtn.querySelector('span').textContent = originalText;
   }, 4000);
@@ -338,7 +394,7 @@ breatheNowBtn.addEventListener('click', () => {
 testNotifyBtn.addEventListener('click', () => {
   triggerNotification(
     '🌿 Breathe Reminder',
-    'Notifications are active! Current rhythm: ' + modeBadge.textContent
+    'Notifications are active! Current rhythm: ' + document.querySelector('.mode-tab.active').textContent
   );
 });
 

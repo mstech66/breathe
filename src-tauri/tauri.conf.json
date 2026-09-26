@@ -16,7 +16,8 @@
         "height": 630,
         "minWidth": 860,
         "minHeight": 560,
-        "center": true
+        "center": true,
+        "backgroundThrottling": "disabled"
       }
     ],
     "security": {

@@ -3,19 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Breathe - WFH Focus & Wellness</title>
+  <meta name="color-scheme" content="light dark" />
+  <title>Breathe</title>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <div class="app-shell">
-    <!-- Left Section: Guided Breathing Visualization -->
-    <section class="visualizer-section">
-      <div class="visualizer-glow" id="visualizerGlow"></div>
-      
-      <div class="flower-container">
+    <!-- Left: Guided Breathing -->
+    <section class="visualizer-section" aria-label="Breathing guide">
+      <div class="flower-container" aria-hidden="true">
         <div class="flower" id="flower">
           <div class="circle circle-1"></div>
           <div class="circle circle-2"></div>
@@ -27,105 +23,92 @@
       </div>
 
       <div class="breath-guide">
-        <span class="guide-phase" id="guidePhase">Inhale deeply</span>
-        <span class="guide-subtext" id="guideSubtext">Expand your chest and relax</span>
+        <span class="guide-phase" id="guidePhase">Breathe in</span>
+        <span class="guide-subtext" id="guideSubtext">Slowly, through your nose</span>
       </div>
 
-      <!-- Ergonomic Desk Health Tip -->
-      <div class="ergonomic-card" id="ergonomicCard">
-        <span class="ergo-icon" id="ergoIcon">🧘</span>
-        <span class="ergo-text" id="ergoText">Drop your shoulders away from your ears</span>
-      </div>
+      <p class="ergo-tip" id="ergoText">Drop your shoulders away from your ears</p>
     </section>
 
-    <!-- Right Section: Control Panel & WFH Rhythms -->
-    <section class="controls-section">
-      <header class="app-header">
-        <div class="title-row">
-          <div class="app-badge" id="modeBadge">50/10 Rhythm</div>
-          <h1 class="app-title">Breathe</h1>
+    <!-- Right: Session Controls -->
+    <main class="controls-section">
+      <div class="mode-control">
+        <div class="segmented" role="group" aria-label="Rhythm">
+          <button class="mode-tab active" data-mode="50-10" aria-pressed="true">Deep Work</button>
+          <button class="mode-tab" data-mode="25-5" aria-pressed="false">Pomodoro</button>
+          <button class="mode-tab" data-mode="micro" aria-pressed="false">Micro-Pause</button>
         </div>
-        <p class="app-subtitle">WFH productivity & mindful recovery companion</p>
-      </header>
-
-      <!-- Mode Selector Segmented Control -->
-      <div class="mode-control-wrapper">
-        <div class="mode-tabs">
-          <button class="mode-tab active" data-mode="50-10">⚡ 50 / 10 Work</button>
-          <button class="mode-tab" data-mode="25-5">🍅 25 / 5 Sprint</button>
-          <button class="mode-tab" data-mode="micro">🌿 Micro-Pause</button>
-        </div>
-        <p class="mode-description" id="modeDescription">50 minutes deep focus followed by a 10-minute restorative break</p>
+        <p class="mode-description" id="modeDescription">50 min focus, then a 10 min break</p>
       </div>
 
-      <!-- Active Status Card -->
-      <div class="status-card" id="statusCard">
-        <div class="status-indicator-row">
-          <div class="pulse-dot" id="statusDot"></div>
+      <!-- Timer -->
+      <section class="timer" id="statusCard" aria-label="Session">
+        <div class="status-row">
+          <span class="status-dot" id="statusDot" aria-hidden="true"></span>
           <span class="status-text" id="statusText">Focus Session Active</span>
           <span class="cycle-count" id="cycleCount">Session 1</span>
         </div>
-        <div class="countdown-display" id="countdownDisplay">
-          <span class="countdown-val" id="countdownVal">50:00</span>
-          <span class="countdown-label" id="countdownLabel">until 10-minute break</span>
+        <span class="countdown-val" id="countdownVal">50:00</span>
+        <span class="countdown-label" id="countdownLabel">until 10-minute break</span>
+        <div class="progress" id="progress" role="progressbar" aria-label="Phase progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+      </section>
+
+      <!-- Interval (Micro-Pause only) -->
+      <div class="setting-group" id="microIntervalGroup" hidden>
+        <span class="setting-label" id="intervalLabel">Remind Me Every</span>
+        <div class="segmented" role="group" aria-labelledby="intervalLabel">
+          <button class="chip" data-minutes="15" aria-pressed="false">15 min</button>
+          <button class="chip active" data-minutes="20" aria-pressed="true">20 min</button>
+          <button class="chip" data-minutes="30" aria-pressed="false">30 min</button>
+          <button class="chip" data-minutes="45" aria-pressed="false">45 min</button>
+          <button class="chip" data-minutes="60" aria-pressed="false">60 min</button>
         </div>
       </div>
 
-      <!-- Interval Selector (shown only in Micro-Pause mode) -->
-      <div class="setting-group" id="microIntervalGroup" style="display: none;">
-        <label class="setting-label">Remind Me Every</label>
-        <div class="interval-chips" id="intervalChips">
-          <button class="chip" data-minutes="15">15m</button>
-          <button class="chip active" data-minutes="20">20m</button>
-          <button class="chip" data-minutes="30">30m</button>
-          <button class="chip" data-minutes="45">45m</button>
-          <button class="chip" data-minutes="60">60m</button>
-        </div>
-      </div>
-
-      <!-- Action Buttons -->
+      <!-- Actions -->
       <div class="action-buttons">
         <button id="toggleBtn" class="btn btn-primary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path id="toggleIconPath" d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
           </svg>
           <span id="toggleBtnText">Pause Session</span>
         </button>
 
-        <div class="btn-group-dual">
+        <div class="btn-row">
           <button id="breatheNowBtn" class="btn btn-secondary">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <polyline points="12 6 12 12 16 14"/>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <g transform="translate(0 2)">
+                <path d="M3 8h11a3 3 0 1 0-3-3"/>
+                <path d="M3 12h15a3 3 0 1 1-3 3"/>
+                <path d="M3 16h7"/>
+              </g>
             </svg>
             <span>Take a Breath Now</span>
           </button>
 
           <button id="skipPhaseBtn" class="btn btn-secondary">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="5 4 15 12 5 20 5 4"/>
-              <line x1="19" y1="5" x2="19" y2="19"/>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M5 5.5v13a.5.5 0 0 0 .77.42L15 12.9V18a1 1 0 0 0 2 0V6a1 1 0 0 0-2 0v5.1L5.77 5.08A.5.5 0 0 0 5 5.5z"/>
             </svg>
             <span id="skipBtnText">Start Break Early</span>
           </button>
         </div>
       </div>
 
-      <!-- Footer & Utility Toggles -->
-      <footer class="app-footer">
-        <div class="toggle-option">
-          <label class="switch">
-            <input type="checkbox" id="soundToggle" checked>
-            <span class="slider"></span>
-          </label>
-          <span class="option-label">Gentle chime on transition</span>
+      <!-- Preferences -->
+      <div class="grouped-list">
+        <label class="list-row">
+          <span>Chime on phase changes</span>
+          <input type="checkbox" class="switch" id="soundToggle" role="switch" checked>
+        </label>
+        <div class="list-row">
+          <span>Notifications</span>
+          <button id="testNotifyBtn" class="btn btn-small">Send Test</button>
         </div>
-
-        <button id="testNotifyBtn" class="btn-ghost">
-          Test Notification
-        </button>
-      </footer>
-    </section>
+      </div>
+    </main>
   </div>
 
   <script type="module" src="main.js"></script>
