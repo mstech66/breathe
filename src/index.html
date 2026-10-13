@@ -8,108 +8,326 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="app-shell">
-    <!-- Left: Guided Breathing -->
-    <section class="visualizer-section" aria-label="Breathing guide">
-      <div class="flower-container" aria-hidden="true">
-        <div class="flower" id="flower">
-          <div class="circle circle-1"></div>
-          <div class="circle circle-2"></div>
-          <div class="circle circle-3"></div>
-          <div class="circle circle-4"></div>
-          <div class="circle circle-5"></div>
-          <div class="circle circle-6"></div>
-        </div>
+  <div class="app" id="app" data-view="focus" data-phase="work">
+
+    <!-- ================= Header (focus / break / breath) ================= -->
+    <header class="topbar" id="topbar">
+      <div class="brand">
+        <img src="assets/logo.png" alt="" width="28" height="28" />
+        <span>Breathe</span>
       </div>
 
-      <div class="breath-guide">
-        <span class="guide-phase" id="guidePhase">Breathe in</span>
-        <span class="guide-subtext" id="guideSubtext">Slowly, through your nose</span>
+      <div class="segmented modes" role="group" aria-label="Rhythm">
+        <button type="button" class="mode-tab" data-mode="deep" aria-pressed="true">Deep Work</button>
+        <button type="button" class="mode-tab" data-mode="pomo" aria-pressed="false">Pomodoro</button>
+        <button type="button" class="mode-tab" data-mode="micro" aria-pressed="false">Micro-Pause</button>
+        <button type="button" class="mode-tab" data-mode="custom" aria-pressed="false">Custom</button>
       </div>
 
-      <p class="ergo-tip" id="ergoText">Drop your shoulders away from your ears</p>
-    </section>
-
-    <!-- Right: Session Controls -->
-    <main class="controls-section">
-      <div class="mode-control">
-        <div class="segmented" role="group" aria-label="Rhythm">
-          <button class="mode-tab active" data-mode="50-10" aria-pressed="true">Deep Work</button>
-          <button class="mode-tab" data-mode="25-5" aria-pressed="false">Pomodoro</button>
-          <button class="mode-tab" data-mode="micro" aria-pressed="false">Micro-Pause</button>
+      <div class="topbar-end">
+        <div class="counter" id="counter">
+          <span class="counter-dots" id="counterDots" aria-hidden="true"></span>
+          <span class="counter-bar" id="counterBar" aria-hidden="true" hidden><span id="counterBarFill"></span></span>
+          <svg class="counter-check" id="counterCheck" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M5 12.5l4.5 4.5L19 7" /></svg>
+          <span id="counterText">0 of 4 today</span>
         </div>
-        <p class="mode-description" id="modeDescription">50 min focus, then a 10 min break</p>
-      </div>
-
-      <!-- Timer -->
-      <section class="timer" id="statusCard" aria-label="Session">
-        <div class="status-row">
-          <span class="status-dot" id="statusDot" aria-hidden="true"></span>
-          <span class="status-text" id="statusText">Focus Session Active</span>
-          <span class="cycle-count" id="cycleCount">Session 1</span>
-        </div>
-        <span class="countdown-val" id="countdownVal">50:00</span>
-        <span class="countdown-label" id="countdownLabel">until 10-minute break</span>
-        <div class="progress" id="progress" role="progressbar" aria-label="Phase progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-          <div class="progress-fill" id="progressFill"></div>
-        </div>
-      </section>
-
-      <!-- Interval (Micro-Pause only) -->
-      <div class="setting-group" id="microIntervalGroup" hidden>
-        <span class="setting-label" id="intervalLabel">Remind Me Every</span>
-        <div class="segmented" role="group" aria-labelledby="intervalLabel">
-          <button class="chip" data-minutes="15" aria-pressed="false">15 min</button>
-          <button class="chip active" data-minutes="20" aria-pressed="true">20 min</button>
-          <button class="chip" data-minutes="30" aria-pressed="false">30 min</button>
-          <button class="chip" data-minutes="45" aria-pressed="false">45 min</button>
-          <button class="chip" data-minutes="60" aria-pressed="false">60 min</button>
-        </div>
-      </div>
-
-      <!-- Actions -->
-      <div class="action-buttons">
-        <button id="toggleBtn" class="btn btn-primary">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path id="toggleIconPath" d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-          </svg>
-          <span id="toggleBtnText">Pause Session</span>
+        <button type="button" class="icon-btn" id="openSettings" aria-label="Settings">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg>
         </button>
+      </div>
+    </header>
 
-        <div class="btn-row">
-          <button id="breatheNowBtn" class="btn btn-secondary">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-              <g transform="translate(0 2)">
-                <path d="M3 8h11a3 3 0 1 0-3-3"/>
-                <path d="M3 12h15a3 3 0 1 1-3 3"/>
-                <path d="M3 16h7"/>
-              </g>
-            </svg>
-            <span>Take a Breath Now</span>
-          </button>
-
-          <button id="skipPhaseBtn" class="btn btn-secondary">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M5 5.5v13a.5.5 0 0 0 .77.42L15 12.9V18a1 1 0 0 0 2 0V6a1 1 0 0 0-2 0v5.1L5.77 5.08A.5.5 0 0 0 5 5.5z"/>
-            </svg>
-            <span id="skipBtnText">Start Break Early</span>
-          </button>
+    <!-- ================= Focus ================= -->
+    <main class="view view-focus" id="viewFocus" aria-label="Focus">
+      <div class="stage">
+        <div class="ring" id="ring">
+          <svg viewBox="0 0 300 300" aria-hidden="true">
+            <circle class="ring-track" cx="150" cy="150" r="140" />
+            <circle class="ring-fill" id="ringFill" cx="150" cy="150" r="140" />
+          </svg>
+          <div class="ring-content">
+            <span class="eyebrow" id="focusStatus">Deep focus</span>
+            <span class="countdown" id="focusTime" role="timer" aria-live="off">50:00</span>
+            <span class="muted" id="focusLabel">until your 10-minute break</span>
+          </div>
         </div>
       </div>
 
-      <!-- Preferences -->
-      <div class="grouped-list">
-        <label class="list-row">
-          <span>Chime on phase changes</span>
-          <input type="checkbox" class="switch" id="soundToggle" role="switch" checked>
-        </label>
-        <div class="list-row">
-          <span>Notifications</span>
-          <button id="testNotifyBtn" class="btn btn-small">Send Test</button>
-        </div>
+      <div class="actions">
+        <button type="button" class="btn btn-secondary" id="pauseBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path id="pauseIcon" d="M9 6v12M15 6v12" /></svg>
+          <span id="pauseText">Pause</span>
+        </button>
+        <button type="button" class="btn btn-primary" id="primaryBtn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path id="primaryIcon" d="M3 9h11a3 3 0 1 0-3-3M3 13h15a3 3 0 1 1-3 3M3 17h7" /></svg>
+          <span id="primaryText">Take a breath</span>
+        </button>
+        <button type="button" class="btn btn-secondary" id="breakNowBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l9 6-9 6zM18 6v12" /></svg>
+          <span>Break now</span>
+        </button>
       </div>
-      <p class="notify-status" id="notifyStatus" role="status" hidden></p>
+
+      <div class="hint-card" id="tipCard">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19c0-8 6-14 15-14 0 9-6 15-14 15M5 19l7-7" /></svg>
+        <span class="hint-label" id="tipLabel">Posture</span>
+        <span class="hint-text" id="tipText">Drop your shoulders away from your ears</span>
+      </div>
     </main>
+
+    <!-- ================= Break ================= -->
+    <main class="view view-break" id="viewBreak" aria-label="Break" hidden>
+      <div class="stage">
+        <div class="flower" data-flower aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+
+      <div class="cue">
+        <span class="eyebrow">Break time</span>
+        <span class="cue-title" id="breakCue">Breathe in, slowly</span>
+        <span class="muted"><strong class="num" id="breakTime">10:00</strong> left in your <span id="breakLen">10</span>-minute break</span>
+        <span class="mini-bar" aria-hidden="true"><span id="breakBar"></span></span>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="btn btn-secondary" id="extendBreakBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+          <span>5 more min</span>
+        </button>
+        <button type="button" class="btn btn-primary" id="endBreakBtn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7" /></svg>
+          <span>I'm back, start focus</span>
+        </button>
+      </div>
+
+      <div class="hint-card">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 4a1.5 1.5 0 1 0 0 .1M9 21l3-7 3 3v4M7 11l4-3 4 2 3-1" /></svg>
+        <span class="hint-label">Try this</span>
+        <span class="hint-text" id="breakIdea">Stand up, roll your shoulders back, and look out a window for 20 seconds</span>
+      </div>
+    </main>
+
+    <!-- ================= Take a breath (guided) ================= -->
+    <main class="view view-breath" id="viewBreath" aria-label="Take a breath" hidden>
+      <div class="stage">
+        <div class="flower" data-flower aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+
+      <div class="cue">
+        <span class="eyebrow" id="breathCount">Take a breath</span>
+        <span class="cue-title" id="breathCue" aria-live="polite">Get comfortable</span>
+        <span class="muted" id="breathSub">Sit back and relax your shoulders</span>
+        <span class="mini-bar" aria-hidden="true"><span id="breathBar"></span></span>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="btn btn-secondary" id="endBreathBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          <span>End early</span>
+        </button>
+        <ol class="steps" id="breathSteps" aria-label="Breath cycle"></ol>
+      </div>
+
+      <div class="hint-card pattern-card">
+        <span class="hint-label">Pattern</span>
+        <div class="pattern-group" role="group" aria-label="Breathing pattern">
+          <button type="button" class="pattern" data-pattern="box" aria-pressed="true">Box 4-4-4-4</button>
+          <button type="button" class="pattern" data-pattern="relax" aria-pressed="false">Relax 4-7-8</button>
+          <button type="button" class="pattern" data-pattern="steady" aria-pressed="false">Steady 5.5s</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- ================= Settings ================= -->
+    <div class="view view-settings" id="viewSettings" hidden>
+      <nav class="settings-nav" aria-label="Settings sections">
+        <button type="button" class="back-link" id="closeSettings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg>
+          <span>Back to Breathe</span>
+        </button>
+        <button type="button" class="nav-item" data-section="general" aria-current="page">General</button>
+        <button type="button" class="nav-item" data-section="rhythm">Rhythm</button>
+        <button type="button" class="nav-item" data-section="schedule">Schedule</button>
+        <button type="button" class="nav-item" data-section="notifications">Notifications</button>
+        <button type="button" class="nav-item" data-section="sound">Sound</button>
+        <button type="button" class="nav-item" data-section="breathing">Breathing</button>
+        <button type="button" class="nav-item" data-section="about">About</button>
+      </nav>
+
+      <div class="settings-body">
+        <!-- General -->
+        <section class="settings-section" data-panel="general">
+          <h1>General</h1>
+          <div class="group">
+            <label class="row">
+              <span class="row-text"><span class="row-title">Launch Breathe at login</span><span class="row-sub" id="autostartSub">Keeps your rhythm going without opening the app</span></span>
+              <input type="checkbox" class="switch" role="switch" data-setting="launchAtLogin" />
+            </label>
+            <label class="row">
+              <span class="row-text"><span class="row-title">Start the timer when Breathe opens</span><span class="row-sub">Off: press Start when your workday begins</span></span>
+              <input type="checkbox" class="switch" role="switch" data-setting="autoStart" />
+            </label>
+            <label class="row">
+              <span class="row-title">When I close the window</span>
+              <select data-setting="closeBehavior">
+                <option value="tray">Keep running in the tray</option>
+                <option value="quit">Quit Breathe</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <!-- Rhythm -->
+        <section class="settings-section" data-panel="rhythm" hidden>
+          <h1>Rhythm</h1>
+          <div class="group">
+            <div class="row">
+              <span class="row-title">Custom rhythm</span>
+              <span class="inline-fields">
+                <span class="muted">Focus</span>
+                <span class="stepper"><button type="button" data-step="customFocus" data-delta="-5" aria-label="Shorter focus">−</button><output data-out="customFocus">45 min</output><button type="button" data-step="customFocus" data-delta="5" aria-label="Longer focus">+</button></span>
+                <span class="muted">Break</span>
+                <span class="stepper"><button type="button" data-step="customBreak" data-delta="-1" aria-label="Shorter break">−</button><output data-out="customBreak">15 min</output><button type="button" data-step="customBreak" data-delta="1" aria-label="Longer break">+</button></span>
+              </span>
+            </div>
+            <label class="row">
+              <span class="row-text"><span class="row-title">Micro-Pause reminder</span><span class="row-sub">How often Micro-Pause asks you to take a breath</span></span>
+              <select data-setting="microMinutes">
+                <option value="15">Every 15 min</option>
+                <option value="20">Every 20 min</option>
+                <option value="30">Every 30 min</option>
+                <option value="45">Every 45 min</option>
+                <option value="60">Every 60 min</option>
+              </select>
+            </label>
+          </div>
+
+          <h2>Daily goal</h2>
+          <div class="group" role="radiogroup" aria-label="Daily goal">
+            <label class="row row-radio">
+              <input type="radio" name="goalMode" value="auto" />
+              <span class="row-text"><span class="row-title">Work it out from my working hours</span><span class="row-sub" id="goalAutoSub">About 8 sessions a day</span></span>
+            </label>
+            <div class="row">
+              <label class="row-radio">
+                <input type="radio" name="goalMode" value="manual" />
+                <span class="row-text"><span class="row-title">Set my own goal</span><span class="row-sub">Good if your workday changes a lot</span></span>
+              </label>
+              <span class="stepper"><button type="button" data-step="goalManual" data-delta="-1" aria-label="Fewer sessions">−</button><output data-out="goalManual">4 sessions</output><button type="button" data-step="goalManual" data-delta="1" aria-label="More sessions">+</button></span>
+            </div>
+            <label class="row row-radio">
+              <input type="radio" name="goalMode" value="none" />
+              <span class="row-text"><span class="row-title">No goal</span><span class="row-sub">Just count my sessions, e.g. "3 sessions today"</span></span>
+            </label>
+            <label class="row">
+              <span class="row-title">Let me know when I reach my goal</span>
+              <input type="checkbox" class="switch" role="switch" data-setting="goalCelebrate" />
+            </label>
+          </div>
+        </section>
+
+        <!-- Schedule -->
+        <section class="settings-section" data-panel="schedule" hidden>
+          <h1>Schedule</h1>
+          <div class="group">
+            <div class="row">
+              <span class="row-text"><span class="row-title">Working hours</span><span class="row-sub">Used to work out your daily goal</span></span>
+              <span class="inline-fields">
+                <input type="time" data-setting="workStart" aria-label="Workday starts" />
+                <span class="muted">to</span>
+                <input type="time" data-setting="workEnd" aria-label="Workday ends" />
+              </span>
+            </div>
+            <label class="row">
+              <span class="row-text"><span class="row-title">Only remind me during working hours</span><span class="row-sub">Outside these hours the timer pauses on its own</span></span>
+              <input type="checkbox" class="switch" role="switch" data-setting="respectHours" />
+            </label>
+          </div>
+        </section>
+
+        <!-- Notifications -->
+        <section class="settings-section" data-panel="notifications" hidden>
+          <h1>Notifications</h1>
+          <div class="group">
+            <label class="row">
+              <span class="row-title">Show notifications</span>
+              <input type="checkbox" class="switch" role="switch" data-setting="notifications" />
+            </label>
+            <div class="row">
+              <span class="row-text">
+                <span class="row-title">Check that reminders reach you</span>
+                <span class="row-sub" id="testResult" role="status">Sends a sample reminder right now</span>
+              </span>
+              <button type="button" class="btn btn-small" id="testNotifyBtn">Send a test</button>
+            </div>
+          </div>
+          <details class="help">
+            <summary>Notifications not showing up?</summary>
+            <p><strong>Windows:</strong> open Settings → System → Notifications, make sure Breathe is allowed, and turn off Do not disturb.</p>
+            <p><strong>macOS:</strong> open System Settings → Notifications → Breathe and turn on Allow notifications.</p>
+          </details>
+        </section>
+
+        <!-- Sound -->
+        <section class="settings-section" data-panel="sound" hidden>
+          <h1>Sound</h1>
+          <div class="group">
+            <label class="row">
+              <span class="row-title">Chime when a break starts or ends</span>
+              <input type="checkbox" class="switch" role="switch" data-setting="chime" />
+            </label>
+            <label class="row">
+              <span class="row-title">Volume</span>
+              <input type="range" min="0" max="1" step="0.05" data-setting="volume" />
+            </label>
+            <div class="row">
+              <span class="row-title">Preview</span>
+              <span class="inline-fields">
+                <button type="button" class="btn btn-small" data-preview="break-start">Break chime</button>
+                <button type="button" class="btn btn-small" data-preview="work-start">Back-to-work chime</button>
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Breathing -->
+        <section class="settings-section" data-panel="breathing" hidden>
+          <h1>Breathing</h1>
+          <div class="group">
+            <label class="row">
+              <span class="row-text"><span class="row-title">Pattern for "Take a breath"</span><span class="row-sub">You can also switch it during a session</span></span>
+              <select data-setting="pattern">
+                <option value="box">Box · 4-4-4-4</option>
+                <option value="relax">Relax · 4-7-8</option>
+                <option value="steady">Steady · 5.5 seconds</option>
+              </select>
+            </label>
+            <label class="row">
+              <span class="row-title">Show posture and wellbeing tips</span>
+              <input type="checkbox" class="switch" role="switch" data-setting="showTips" />
+            </label>
+          </div>
+        </section>
+
+        <!-- About -->
+        <section class="settings-section" data-panel="about" hidden>
+          <h1>About</h1>
+          <div class="group">
+            <div class="row"><span class="row-title">Version</span><span class="muted" id="appVersion">1.0.0</span></div>
+            <div class="row"><span class="row-title">Source code</span><a href="https://github.com/mstech66/breathe" id="repoLink">github.com/mstech66/breathe</a></div>
+            <div class="row">
+              <span class="row-text"><span class="row-title">Reset all settings</span><span class="row-sub">Today's session count is kept</span></span>
+              <button type="button" class="btn btn-small" id="resetSettingsBtn">Reset</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" role="status" hidden></div>
   </div>
 
   <script type="module" src="main.js"></script>

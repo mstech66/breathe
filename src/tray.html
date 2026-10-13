@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Breathe</title>
+  <style>
+    @font-face {
+      font-family: "Figtree";
+      src: url("assets/fonts/Figtree.woff2") format("woff2");
+      font-weight: 300 900;
+      font-display: block;
+    }
+
+    :root {
+      color-scheme: light dark;
+      --bg: #FFFFFF;
+      --card: #F1F4F2;
+      --line: rgba(23, 33, 29, 0.14);
+      --track: rgba(23, 33, 29, 0.1);
+      --text: #17211D;
+      --text-2: #3B4641;
+      --muted: #56615C;
+      --dot-empty: #9AA59F;
+      --accent: #16804A;
+      --accent-ink: #0F5E36;
+      --on-accent: #FFFFFF;
+    }
+    body[data-phase="break"] {
+      --card: #EEF4F5;
+      --text: #14212A;
+      --muted: #4C5C64;
+      --dot-empty: #8FA2AB;
+      --accent: #0A6E8A;
+      --accent-ink: #07526A;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #131C1A;
+        --card: #1C2826;
+        --line: rgba(255, 255, 255, 0.14);
+        --track: rgba(255, 255, 255, 0.1);
+        --text: #EEF3F0;
+        --text-2: #D3DCD8;
+        --muted: #A3B1AB;
+        --dot-empty: #63716B;
+        --accent: #3DD68C;
+        --accent-ink: #7FE3B0;
+        --on-accent: #04180D;
+      }
+      body[data-phase="break"] {
+        --card: #182730;
+        --text: #EAF3F6;
+        --muted: #9FB3BC;
+        --dot-empty: #5E7480;
+        --accent: #5AC8E0;
+        --accent-ink: #9BDDED;
+        --on-accent: #04161C;
+      }
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body { height: 100%; }
+    body {
+      font-family: "Figtree", "Segoe UI Variable Text", "Segoe UI", -apple-system, system-ui, sans-serif;
+      font-size: 14px;
+      color: var(--text);
+      background: var(--bg);
+      overflow: hidden;
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+    }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .pop {
+      height: 100vh;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .head { display: flex; align-items: center; justify-content: space-between; }
+    .brand { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; }
+    .brand img { display: block; border-radius: 6px; }
+    .status { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--accent); }
+    .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    body.paused .status { color: var(--muted); }
+
+    .card {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 16px;
+      background: var(--card);
+      border-radius: 14px;
+    }
+    .card-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
+    .time {
+      font-size: 48px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
+    }
+    body.paused .time { color: var(--muted); }
+    .sessions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; font-size: 12px; color: var(--muted); text-align: right; }
+    .dots { display: flex; gap: 4px; }
+    .dots i { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--dot-empty); }
+    .dots i.done { background: var(--accent); border-color: var(--accent); }
+    .bar { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
+    .bar span { display: block; height: 100%; width: 0; border-radius: 3px; background: var(--accent); transition: width 1s linear; }
+    .card-foot { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); }
+    .card-foot strong { color: var(--text); font-weight: 600; white-space: nowrap; }
+
+    .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .tile {
+      height: 64px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--card);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .tile:hover { filter: brightness(0.97); }
+    .tile.primary { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+    .tile.primary:hover { background: var(--accent-ink); filter: none; }
+    .tile:disabled { opacity: 0.45; cursor: default; }
+
+    .label { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+    .snooze { display: flex; flex-direction: column; gap: 8px; }
+    .chips { display: flex; gap: 8px; }
+    .chip {
+      flex: 1;
+      height: 40px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: transparent;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .chip:hover { border-color: var(--muted); }
+
+    .foot {
+      margin-top: auto;
+      padding-top: 12px;
+      border-top: 1px solid var(--track);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .link { border: 0; background: none; padding: 6px 0; font-size: 14px; color: var(--text-2); }
+    .link:hover { color: var(--text); }
+    .link.strong { color: var(--accent); font-weight: 600; }
+    .foot-end { display: flex; gap: 16px; }
+  </style>
+</head>
+<body data-phase="work">
+  <div class="pop">
+    <div class="head">
+      <span class="brand"><img src="assets/logo.png" alt="" width="24" height="24" />Breathe</span>
+      <span class="status" id="status">Ready</span>
+    </div>
+
+    <div class="card">
+      <div class="card-top">
+        <span class="time" id="time">50:00</span>
+        <span class="sessions">
+          <span class="dots" id="dots" aria-hidden="true"></span>
+          <span id="sessions">0 sessions today</span>
+        </span>
+      </div>
+      <div class="bar" aria-hidden="true"><span id="bar"></span></div>
+      <div class="card-foot">
+        <span id="label">until your 10-minute break</span>
+        <strong id="endsAt"></strong>
+      </div>
+    </div>
+
+    <div class="tiles">
+      <button type="button" class="tile" id="pauseTile">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path id="pauseIcon" d="M9 6v12M15 6v12" /></svg>
+        <span id="pauseText">Pause</span>
+      </button>
+      <button type="button" class="tile primary" data-action="breathe">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9h11a3 3 0 1 0-3-3M3 13h15a3 3 0 1 1-3 3M3 17h7" /></svg>
+        Breathe
+      </button>
+      <button type="button" class="tile" id="breakTile" data-action="break-now">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l9 6-9 6zM18 6v12" /></svg>
+        Break now
+      </button>
+    </div>
+
+    <div class="snooze">
+      <span class="label">Snooze reminders</span>
+      <div class="chips">
+        <button type="button" class="chip" data-action="snooze-15">15 min</button>
+        <button type="button" class="chip" data-action="snooze-30">30 min</button>
+        <button type="button" class="chip" data-action="snooze-60">1 hour</button>
+      </div>
+    </div>
+
+    <div class="foot">
+      <button type="button" class="link strong" data-action="show">Open Breathe</button>
+      <span class="foot-end">
+        <button type="button" class="link" data-action="settings">Settings</button>
+        <button type="button" class="link" data-action="quit">Quit</button>
+      </span>
+    </div>
+  </div>
+
+  <script type="module" src="tray.js"></script>
+</body>
+</html>

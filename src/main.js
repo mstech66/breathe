@@ -1,424 +1,929 @@
-// Breathe Desktop - WFH Work-Rest Rhythm Controller
-// Modern Tauri v2 Controller
+// Breathe: work–rest rhythm and guided breathing for people who work from home.
+// Plain JS, no build step. Talks to the Tauri backend through window.__TAURI__ when present,
+// and still runs in a normal browser for quick UI work.
 
-// State
-let currentMode = '50-10'; // '50-10' | '25-5' | 'micro'
-let currentPhase = 'work'; // 'work' | 'break'
-let sessionCount = 1;
+/* =========================================================================
+   Settings and today's progress (persisted in localStorage)
+   ========================================================================= */
 
-let workMinutes = 50;
-let breakMinutes = 10;
-let microMinutes = 20;
+const DEFAULTS = {
+  mode: 'deep',            // 'deep' | 'pomo' | 'micro' | 'custom'
+  customFocus: 45,
+  customBreak: 15,
+  microMinutes: 20,
+  goalMode: 'auto',        // 'auto' | 'manual' | 'none'
+  goalManual: 4,
+  goalCelebrate: true,
+  launchAtLogin: false,
+  autoStart: false,
+  closeBehavior: 'tray',   // 'tray' | 'quit'
+  workStart: '11:00',
+  workEnd: '19:00',
+  respectHours: false,
+  notifications: true,
+  chime: true,
+  volume: 0.6,
+  pattern: 'box',          // 'box' | 'relax' | 'steady'
+  showTips: true
+};
 
-let remainingSeconds = workMinutes * 60;
-let isPaused = false;
-let soundEnabled = true;
-let timerId = null;
-let lastTickAt = Date.now();
+const SETTINGS_KEY = 'breathe.settings.v1';
+const TODAY_KEY = 'breathe.today.v1';
 
-// DOM Elements
-const appShell = document.querySelector('.app-shell');
-const modeTabs = document.querySelectorAll('.mode-tab');
-const modeDescription = document.getElementById('modeDescription');
-const statusDotEl = document.getElementById('statusDot');
-const statusTextEl = document.getElementById('statusText');
-const cycleCountEl = document.getElementById('cycleCount');
-const countdownValEl = document.getElementById('countdownVal');
-const countdownLabelEl = document.getElementById('countdownLabel');
-const progressEl = document.getElementById('progress');
-const progressFillEl = document.getElementById('progressFill');
-const microIntervalGroup = document.getElementById('microIntervalGroup');
-const chips = document.querySelectorAll('.chip');
+function load(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? { ...fallback, ...JSON.parse(raw) } : { ...fallback };
+  } catch {
+    return { ...fallback };
+  }
+}
 
-const toggleBtn = document.getElementById('toggleBtn');
-const toggleBtnText = document.getElementById('toggleBtnText');
-const toggleIconPath = document.getElementById('toggleIconPath');
-const breatheNowBtn = document.getElementById('breatheNowBtn');
-const skipPhaseBtn = document.getElementById('skipPhaseBtn');
-const skipBtnText = document.getElementById('skipBtnText');
-const testNotifyBtn = document.getElementById('testNotifyBtn');
-const soundToggle = document.getElementById('soundToggle');
+function save(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
+}
 
-const guidePhaseEl = document.getElementById('guidePhase');
-const guideSubtextEl = document.getElementById('guideSubtext');
-const flowerEl = document.getElementById('flower');
-const ergoTextEl = document.getElementById('ergoText');
+const settings = load(SETTINGS_KEY, DEFAULTS);
+const saveSettings = () => save(SETTINGS_KEY, settings);
 
-// WFH Ergonomic Health & Posture Prompts
-const ergoTips = [
-  'Drop your shoulders away from your ears',
-  'Drink a glass of water',
-  'Look at something 20 feet away for 20 seconds',
-  'Unclench your jaw and soften your forehead',
-  'Stand up and gently stretch your hamstrings',
-  'Check your posture: feet flat, back supported',
-  'Take a long, slow belly breath through your nose'
+const dateKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+let today = load(TODAY_KEY, { date: dateKey(), sessions: 0, celebrated: false });
+if (today.date !== dateKey()) today = { date: dateKey(), sessions: 0, celebrated: false };
+const saveToday = () => save(TODAY_KEY, today);
+
+/* =========================================================================
+   Rhythms
+   ========================================================================= */
+
+const MODES = {
+  deep: { label: 'Deep Work', status: 'Deep focus' },
+  pomo: { label: 'Pomodoro', status: 'Pomodoro sprint' },
+  micro: { label: 'Micro-Pause', status: 'Mindful reminders' },
+  custom: { label: 'Custom', status: 'Custom rhythm' }
+};
+
+function rhythm(mode = settings.mode) {
+  switch (mode) {
+    case 'pomo': return { work: 25, rest: 5 };
+    case 'custom': return { work: settings.customFocus, rest: settings.customBreak };
+    case 'micro': return { work: Number(settings.microMinutes), rest: 0 };
+    default: return { work: 50, rest: 10 };
+  }
+}
+
+function minutesOf(hhmm) {
+  const [h, m] = String(hhmm || '0:0').split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+function workdayMinutes() {
+  let span = minutesOf(settings.workEnd) - minutesOf(settings.workStart);
+  if (span <= 0) span += 24 * 60;
+  return span;
+}
+
+function autoGoal() {
+  const r = settings.mode === 'micro' ? rhythm('deep') : rhythm();
+  return Math.max(1, Math.floor(workdayMinutes() / (r.work + r.rest)));
+}
+
+function dailyGoal() {
+  if (settings.goalMode === 'none') return 0;
+  if (settings.goalMode === 'manual') return settings.goalManual;
+  return autoGoal();
+}
+
+function withinWorkingHours(date = new Date()) {
+  const now = date.getHours() * 60 + date.getMinutes();
+  const start = minutesOf(settings.workStart);
+  const end = minutesOf(settings.workEnd);
+  return start <= end ? now >= start && now < end : now >= start || now < end;
+}
+
+/* =========================================================================
+   Content
+   ========================================================================= */
+
+const TIPS = [
+  ['Posture', 'Drop your shoulders away from your ears'],
+  ['Eyes', 'Look at something 20 feet away for 20 seconds'],
+  ['Water', 'Have a few sips of water'],
+  ['Posture', 'Feet flat on the floor, back against the chair'],
+  ['Face', 'Unclench your jaw and soften your forehead'],
+  ['Breath', 'Take one slow breath into your belly']
 ];
 
-let tipIndex = 0;
-setInterval(() => {
-  tipIndex = (tipIndex + 1) % ergoTips.length;
-  ergoTextEl.style.opacity = '0';
-  setTimeout(() => {
-    ergoTextEl.textContent = ergoTips[tipIndex];
-    ergoTextEl.style.opacity = '1';
-  }, 300);
-}, 12000);
+const BREAK_IDEAS = [
+  'Stand up, roll your shoulders back, and look out a window for 20 seconds',
+  'Refill your water and drink a full glass',
+  'Reach both arms overhead and hold for 10 seconds, then fold forward gently',
+  'Walk to another room and back, slowly',
+  'Close your eyes and listen to the sounds around you for one minute',
+  'Stretch your neck: ear to shoulder, five breaths each side'
+];
 
-// Web Audio API: Synthesized Tibetan Singing Bowl & Welcoming Chimes
-function playChime(type = 'bell') {
-  if (!soundEnabled) return;
+const PATTERNS = {
+  box: { breaths: 4, steps: [['in', 4], ['hold', 4], ['out', 4], ['rest', 4]] },
+  relax: { breaths: 3, steps: [['in', 4], ['hold', 7], ['out', 8]] },
+  steady: { breaths: 5, steps: [['in', 5.5], ['out', 5.5]] }
+};
+
+const STEP_TEXT = {
+  in: ['Breathe in', 'Fill your belly first, then your chest', 'In'],
+  hold: ['Hold', 'Keep your shoulders soft', 'Hold'],
+  out: ['Breathe out', 'Slowly, and let everything go', 'Out'],
+  rest: ['Rest', 'Stay empty for a moment', 'Hold']
+};
+
+/* =========================================================================
+   DOM
+   ========================================================================= */
+
+const $ = (id) => document.getElementById(id);
+const app = $('app');
+
+const el = {
+  modeTabs: document.querySelectorAll('.mode-tab'),
+  counter: $('counter'), counterDots: $('counterDots'), counterBar: $('counterBar'),
+  counterBarFill: $('counterBarFill'), counterCheck: $('counterCheck'), counterText: $('counterText'),
+  views: { focus: $('viewFocus'), break: $('viewBreak'), breath: $('viewBreath'), settings: $('viewSettings') },
+  ringFill: $('ringFill'), focusStatus: $('focusStatus'), focusTime: $('focusTime'), focusLabel: $('focusLabel'),
+  pauseBtn: $('pauseBtn'), pauseIcon: $('pauseIcon'), pauseText: $('pauseText'),
+  primaryBtn: $('primaryBtn'), primaryIcon: $('primaryIcon'), primaryText: $('primaryText'),
+  breakNowBtn: $('breakNowBtn'),
+  tipCard: $('tipCard'), tipLabel: $('tipLabel'), tipText: $('tipText'),
+  breakCue: $('breakCue'), breakTime: $('breakTime'), breakLen: $('breakLen'), breakBar: $('breakBar'), breakIdea: $('breakIdea'),
+  breathCount: $('breathCount'), breathCue: $('breathCue'), breathSub: $('breathSub'), breathBar: $('breathBar'),
+  breathSteps: $('breathSteps'), endBreathBtn: $('endBreathBtn'),
+  toast: $('toast')
+};
+
+const ICON = {
+  pause: 'M9 6v12M15 6v12',
+  play: 'M8 5.5v13l10.5-6.5z',
+  wind: 'M3 9h11a3 3 0 1 0-3-3M3 13h15a3 3 0 1 1-3 3M3 17h7'
+};
+
+const RING_LENGTH = 879.65;
+
+/* =========================================================================
+   Tauri bridge (no-ops in a plain browser)
+   ========================================================================= */
+
+const tauri = window.__TAURI__;
+const isDesktop = Boolean(tauri && tauri.core);
+
+async function invoke(cmd, args) {
+  if (!isDesktop) throw new Error('Not running in the desktop app');
+  return tauri.core.invoke(cmd, args);
+}
+
+/* =========================================================================
+   Sound: one shared AudioContext (browsers cap how many can exist)
+   ========================================================================= */
+
+let audioCtx = null;
+
+function playChime(type = 'bell', force = false) {
+  if (!settings.chime && !force) return;
   try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
-
-    if (type === 'break-start') {
-      // Gentle, deep relaxing 2-harmonic bowl
-      [320, 640].forEach((freq, idx) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, ctx.currentTime);
-        gain.gain.setValueAtTime(idx === 0 ? 0.3 : 0.15, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 3.8);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 3.9);
-      });
-    } else if (type === 'work-start') {
-      // Uplifting, crisp welcome-back chime (F#5 -> A5)
-      [740, 880].forEach((freq, idx) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        const start = ctx.currentTime + idx * 0.25;
-        osc.frequency.setValueAtTime(freq, start);
-        gain.gain.setValueAtTime(0.25, start);
-        gain.gain.exponentialRampToValueAtTime(0.0001, start + 2.5);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(start);
-        osc.stop(start + 2.6);
-      });
-    } else {
-      // Standard harmonic bell
-      [370, 740, 1110].forEach((freq, idx) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, ctx.currentTime);
-        gain.gain.setValueAtTime([0.25, 0.1, 0.04][idx], ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 3.0);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 3.1);
-      });
-    }
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    audioCtx = audioCtx || new Ctx();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const ctx = audioCtx;
+    const vol = Math.max(0, Math.min(1, Number(settings.volume)));
+    const tones = {
+      'break-start': { freqs: [320, 640], gains: [0.3, 0.15], len: 3.8, stagger: 0 },
+      'work-start': { freqs: [740, 880], gains: [0.25, 0.25], len: 2.5, stagger: 0.25 },
+      bell: { freqs: [370, 740, 1110], gains: [0.25, 0.1, 0.04], len: 3.0, stagger: 0 }
+    }[type] || null;
+    if (!tones || vol === 0) return;
+    tones.freqs.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const start = ctx.currentTime + i * tones.stagger;
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(Math.max(0.0001, tones.gains[i] * vol), start);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + tones.len);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + tones.len + 0.1);
+    });
   } catch (e) {
     console.warn('Audio error:', e);
   }
 }
 
-// Native Notification Dispatcher
-// Resolves to null on success, or an error message the UI can show.
-async function triggerNotification(title, body) {
-  // 1. Tauri native Rust backend
-  if (window.__TAURI__ && window.__TAURI__.core) {
+/* =========================================================================
+   Notifications. Resolves to null on success, or an error message.
+   ========================================================================= */
+
+async function notify(title, body, { force = false } = {}) {
+  if (!settings.notifications && !force) return null;
+  if (isDesktop) {
     try {
-      await window.__TAURI__.core.invoke('trigger_native_toast', {
-        title: title || '🌿 Breathe Reminder',
-        body: body || 'Time to pause, release tension, and take a deep breath.'
-      });
+      await invoke('trigger_native_toast', { title, body });
       return null;
     } catch (e) {
       console.warn('Notification failed:', e);
       return String(e);
     }
   }
-
-  // 2. Browser fallback
-  if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification(title, { body });
-    return null;
+  if ('Notification' in window) {
+    if (Notification.permission === 'default') await Notification.requestPermission();
+    if (Notification.permission === 'granted') {
+      new Notification(title, { body });
+      return null;
+    }
   }
   return 'Notifications are not available here.';
 }
 
-// Time Formatter
-function formatTime(totalSeconds) {
-  const mins = Math.floor(totalSeconds / 60);
-  const secs = totalSeconds % 60;
-  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+let toastTimer = null;
+function toast(message) {
+  el.toast.textContent = message;
+  el.toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.toast.hidden = true; }, 3200);
 }
 
-function phaseTotalSeconds() {
-  if (currentMode === 'micro') return microMinutes * 60;
-  return (currentPhase === 'work' ? workMinutes : breakMinutes) * 60;
+/* =========================================================================
+   Timer state
+   ========================================================================= */
+
+const timer = {
+  phase: 'work',        // 'work' | 'break'
+  started: false,       // the user has started their day
+  paused: false,
+  hoursPaused: false,   // paused automatically outside working hours
+  snoozeUntil: 0,
+  remaining: rhythm().work * 60,
+  total: rhythm().work * 60,
+  lastTick: Date.now()
+};
+
+let view = 'focus';       // 'focus' | 'break' | 'breath' | 'settings'
+let returnView = 'focus'; // where Settings / Take a breath go back to
+
+function formatTime(sec) {
+  const s = Math.max(0, Math.round(sec));
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
-// Countdown + progress bar
-function renderTime() {
-  countdownValEl.textContent = formatTime(remainingSeconds);
-  const total = phaseTotalSeconds();
-  const pct = Math.min(100, Math.max(0, ((total - remainingSeconds) / total) * 100));
-  progressFillEl.style.width = `${pct}%`;
-  progressEl.setAttribute('aria-valuenow', Math.round(pct));
+function clockTime(ms) {
+  return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-// Switch Session Phase (Work <-> Break)
-function transitionPhase() {
-  if (currentMode === 'micro') {
-    // In micro mode, just repeat reminder
-    playChime('bell');
-    triggerNotification(
-      '🌿 Mindful Pause',
-      'Take 3 deep breaths. Relax your shoulders and soften your gaze.'
-    );
-    remainingSeconds = microMinutes * 60;
-    return;
+function resetPhase(phase) {
+  const r = rhythm();
+  timer.phase = phase;
+  timer.total = (phase === 'work' ? r.work : r.rest) * 60;
+  timer.remaining = timer.total;
+  timer.lastTick = Date.now();
+}
+
+function startDay() {
+  timer.started = true;
+  timer.paused = false;
+  timer.lastTick = Date.now();
+  playChime('work-start');
+  render();
+}
+
+function setPaused(paused) {
+  timer.paused = paused;
+  timer.snoozeUntil = 0;
+  timer.hoursPaused = false;
+  timer.lastTick = Date.now();
+  render();
+}
+
+function snooze(minutes) {
+  if (!timer.started) timer.started = true;
+  timer.paused = true;
+  timer.hoursPaused = false;
+  timer.snoozeUntil = Date.now() + minutes * 60 * 1000;
+  toast(`Reminders snoozed until ${clockTime(timer.snoozeUntil)}`);
+  render();
+}
+
+function countSession() {
+  today.sessions += 1;
+  const goal = dailyGoal();
+  if (settings.goalCelebrate && goal > 0 && today.sessions === goal && !today.celebrated) {
+    today.celebrated = true;
+    notify('🌿 Daily goal reached', `${goal} focus sessions done today. Nice work. Keep going or call it a day.`);
+    toast(`Daily goal reached: ${goal} sessions`);
   }
-
-  if (currentPhase === 'work') {
-    // Work completed -> Start Break
-    currentPhase = 'break';
-    remainingSeconds = breakMinutes * 60;
-    appShell.classList.add('break-mode');
-
-    playChime('break-start');
-    triggerNotification(
-      `☕ Time for your ${breakMinutes}-Minute Break!`,
-      'Step away from your monitor, stretch your legs, and grab some water.'
-    );
-
-    statusTextEl.textContent = 'Rest & Recharge Break';
-    countdownLabelEl.textContent = 'until deep focus resumes';
-    skipBtnText.textContent = 'End Break Early';
-  } else {
-    // Break completed -> Resume Work
-    currentPhase = 'work';
-    sessionCount++;
-    remainingSeconds = workMinutes * 60;
-    appShell.classList.remove('break-mode');
-
-    playChime('work-start');
-    triggerNotification(
-      '⚡ Break Complete!',
-      `Session ${sessionCount} begins. Clear distractions and focus on your priority.`
-    );
-
-    statusTextEl.textContent = 'Focus Session Active';
-    countdownLabelEl.textContent = `until ${breakMinutes}-minute break`;
-    skipBtnText.textContent = 'Start Break Early';
-    cycleCountEl.textContent = `Session ${sessionCount}`;
-  }
+  saveToday();
 }
 
-// Timer Tick
-// Intervals get throttled or suspended when the window is minimized/hidden,
-// so count real elapsed wall-clock time instead of assuming 1s per tick.
+function beginBreak({ early = false } = {}) {
+  if (settings.mode === 'micro') return;
+  const elapsedShare = 1 - timer.remaining / timer.total;
+  if (!early || elapsedShare >= 0.5) countSession();
+  resetPhase('break');
+  timer.started = true;
+  timer.paused = false;
+  timer.snoozeUntil = 0;
+  pickBreakIdea();
+  playChime('break-start');
+  notify(`☕ Time for your ${rhythm().rest}-minute break`, 'Step away from the screen, stretch, and grab some water.');
+  if (view !== 'settings') showView('break');
+  else returnView = 'break';
+  render();
+}
+
+function beginFocus({ fromUser = false } = {}) {
+  resetPhase('work');
+  timer.started = true;
+  timer.paused = false;
+  timer.snoozeUntil = 0;
+  playChime('work-start');
+  if (!fromUser) notify('⚡ Break is over', 'Next focus session starts now. Pick one thing to work on.');
+  if (view === 'break' || view === 'breath') showView('focus');
+  else if (view === 'settings') returnView = 'focus';
+  render();
+}
+
+function microReminder() {
+  playChime('bell');
+  notify('🌿 Mindful pause', 'Take three slow breaths. Relax your shoulders and soften your gaze.');
+  resetPhase('work');
+}
+
+function phaseComplete() {
+  if (settings.mode === 'micro') microReminder();
+  else if (timer.phase === 'work') beginBreak();
+  else beginFocus();
+}
+
+// Intervals are throttled or suspended while the window is hidden, so count
+// real wall-clock time instead of assuming one second per tick.
 function tick() {
   const now = Date.now();
-  if (isPaused) {
-    lastTickAt = now;
+
+  if (today.date !== dateKey()) {
+    today = { date: dateKey(), sessions: 0, celebrated: false };
+    saveToday();
+  }
+
+  if (timer.snoozeUntil && now >= timer.snoozeUntil) {
+    timer.snoozeUntil = 0;
+    timer.paused = false;
+    timer.lastTick = now;
+  }
+
+  if (settings.respectHours && timer.started) {
+    const inside = withinWorkingHours();
+    if (!inside && !timer.paused) { timer.paused = true; timer.hoursPaused = true; }
+    if (inside && timer.hoursPaused) { timer.paused = false; timer.hoursPaused = false; timer.lastTick = now; }
+  }
+
+  if (!timer.started || timer.paused) {
+    timer.lastTick = now;
+    render();
     return;
   }
 
-  const elapsed = Math.floor((now - lastTickAt) / 1000);
+  const elapsed = Math.floor((now - timer.lastTick) / 1000);
   if (elapsed <= 0) return;
-  lastTickAt += elapsed * 1000; // keep the sub-second remainder
+  timer.lastTick += elapsed * 1000;
 
-  if (elapsed >= remainingSeconds) {
-    // Carry any overshoot into the next phase (at most one transition per tick)
-    const overshoot = elapsed - remainingSeconds;
-    transitionPhase();
-    remainingSeconds = Math.max(0, remainingSeconds - overshoot);
+  if (elapsed >= timer.remaining) {
+    const overshoot = elapsed - timer.remaining;
+    phaseComplete();
+    timer.remaining = Math.max(1, timer.remaining - overshoot);
   } else {
-    remainingSeconds -= elapsed;
+    timer.remaining -= elapsed;
   }
-  renderTime();
+  render();
 }
 
-// Start Timer
-function startTimer() {
-  if (timerId) clearInterval(timerId);
-  lastTickAt = Date.now();
-  renderTime();
-  timerId = setInterval(tick, 1000);
-}
+/* =========================================================================
+   Rendering
+   ========================================================================= */
 
-// Catch up immediately when the window is restored
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) tick();
-});
+let lastTooltip = '';
 
-// Mode Selection Handler
-function applyMode(mode) {
-  currentMode = mode;
-  currentPhase = 'work';
-  appShell.classList.remove('break-mode');
+function renderCounter() {
+  const goal = dailyGoal();
+  const done = today.sessions;
+  const met = goal > 0 && done >= goal;
 
-  if (mode === '50-10') {
-    workMinutes = 50;
-    breakMinutes = 10;
-    remainingSeconds = workMinutes * 60;
-    modeDescription.textContent = '50 min focus, then a 10 min break';
-    statusTextEl.textContent = 'Focus Session Active';
-    countdownLabelEl.textContent = 'until 10-minute break';
-  } else if (mode === '25-5') {
-    workMinutes = 25;
-    breakMinutes = 5;
-    remainingSeconds = workMinutes * 60;
-    modeDescription.textContent = '25 min sprint, then a 5 min break';
-    statusTextEl.textContent = 'Pomodoro Sprint';
-    countdownLabelEl.textContent = 'until 5-minute break';
-  } else if (mode === 'micro') {
-    remainingSeconds = microMinutes * 60;
-    modeDescription.textContent = 'A gentle reminder to pause and take a few breaths';
-    statusTextEl.textContent = 'Mindful Reminders';
-    countdownLabelEl.textContent = 'until next breathing pause';
+  el.counter.classList.toggle('met', met);
+  el.counterCheck.hidden = !met;
+  el.counterDots.hidden = !(goal > 0 && goal <= 8);
+  el.counterBar.hidden = !(goal > 8);
+
+  if (goal > 0 && goal <= 8) {
+    const dots = Math.max(goal, Math.min(done, 8));
+    el.counterDots.innerHTML = Array.from({ length: dots }, (_, i) => `<i class="${i < done ? 'done' : ''}"></i>`).join('');
   }
+  if (goal > 8) el.counterBarFill.style.width = `${Math.min(100, Math.round((done / goal) * 100))}%`;
 
-  microIntervalGroup.hidden = mode !== 'micro';
-  skipPhaseBtn.hidden = mode === 'micro';
-  skipBtnText.textContent = 'Start Break Early';
-
-  renderTime();
+  if (goal === 0) el.counterText.textContent = `${done} ${done === 1 ? 'session' : 'sessions'} today`;
+  else if (met) el.counterText.innerHTML = `<strong>${done} today</strong> · goal met`;
+  else el.counterText.textContent = `${done} of ${goal} today`;
+  el.counter.title = goal ? `Daily goal: ${goal} focus sessions` : 'Focus sessions today';
 }
 
-// Pause / Resume Toggle
-function togglePause() {
-  isPaused = !isPaused;
+function renderFocus() {
+  const r = rhythm();
+  const mode = MODES[settings.mode];
+  const micro = settings.mode === 'micro';
 
-  if (isPaused) {
-    statusDotEl.classList.add('paused');
-    statusTextEl.textContent += ' (Paused)';
-    toggleBtn.classList.add('paused');
-    toggleBtnText.textContent = 'Resume Timer';
-    toggleIconPath.setAttribute('d', 'M8 5v14l11-7z');
+  el.focusTime.textContent = formatTime(timer.remaining);
+  const share = timer.started && timer.phase === 'work' ? 1 - timer.remaining / timer.total : 0;
+  el.ringFill.style.strokeDashoffset = String(RING_LENGTH * (1 - share));
+
+  let status = mode.status;
+  let label = micro ? 'until your next breathing pause' : `until your ${r.rest}-minute break`;
+  if (!timer.started) {
+    status = 'Ready when you are';
+    label = micro ? `A breathing reminder every ${r.work} minutes` : `${r.work} min focus, then a ${r.rest}-minute break`;
+  } else if (timer.snoozeUntil) {
+    status = 'Snoozed';
+    label = `Reminders are back at ${clockTime(timer.snoozeUntil)}`;
+  } else if (timer.hoursPaused) {
+    status = 'Outside working hours';
+    label = `Resumes at ${settings.workStart}`;
+  } else if (timer.paused) {
+    status = 'Paused';
+  }
+  el.focusStatus.textContent = status;
+  el.focusLabel.textContent = label;
+  app.classList.toggle('paused', timer.started && timer.paused);
+
+  // Buttons: idle = [Take a breath] [Start focus]; running = [Pause] [Take a breath] [Break now]
+  if (!timer.started) {
+    el.pauseIcon.setAttribute('d', ICON.wind);
+    el.pauseText.textContent = 'Take a breath';
+    el.primaryIcon.setAttribute('d', ICON.play);
+    el.primaryText.textContent = micro ? 'Start reminders' : 'Start focus';
+    el.breakNowBtn.hidden = true;
   } else {
-    lastTickAt = Date.now(); // don't count paused time
-    statusDotEl.classList.remove('paused');
-    statusTextEl.textContent = statusTextEl.textContent.replace(' (Paused)', '');
-    toggleBtn.classList.remove('paused');
-    toggleBtnText.textContent = 'Pause Session';
-    toggleIconPath.setAttribute('d', 'M6 19h4V5H6v14zm8-14v14h4V5h-4z');
+    el.pauseIcon.setAttribute('d', timer.paused ? ICON.play : ICON.pause);
+    el.pauseText.textContent = timer.paused ? 'Resume' : 'Pause';
+    el.primaryIcon.setAttribute('d', ICON.wind);
+    el.primaryText.textContent = 'Take a breath';
+    el.breakNowBtn.hidden = micro;
+  }
+
+  el.tipCard.hidden = !settings.showTips;
+}
+
+function renderBreak() {
+  el.breakTime.textContent = formatTime(timer.remaining);
+  el.breakLen.textContent = String(Math.round(timer.total / 60));
+  const share = timer.phase === 'break' ? 1 - timer.remaining / timer.total : 0;
+  el.breakBar.style.width = `${(share * 100).toFixed(1)}%`;
+}
+
+function renderTooltip() {
+  let text = 'Breathe';
+  if (!timer.started) text = 'Breathe · ready to start';
+  else if (timer.snoozeUntil) text = `Breathe · snoozed until ${clockTime(timer.snoozeUntil)}`;
+  else if (timer.paused) text = 'Breathe · paused';
+  else if (settings.mode === 'micro') text = `Breathe · next pause in ${Math.ceil(timer.remaining / 60)} min`;
+  else if (timer.phase === 'work') text = `Breathe · break in ${Math.ceil(timer.remaining / 60)} min`;
+  else text = `Breathe · break ends in ${Math.ceil(timer.remaining / 60)} min`;
+  if (text !== lastTooltip) {
+    lastTooltip = text;
+    invoke('set_tray_tooltip', { text }).catch(() => {});
   }
 }
 
-// Breathing guide, driven by the flower animation so the words match the motion.
-// Each alternate iteration of the flower is one half-breath (expand = in, contract = out).
-const phases = [
-  { text: 'Breathe in', subtext: 'Slowly, through your nose' },
-  { text: 'Breathe out', subtext: 'Let your shoulders soften' }
-];
+// The tray popover is a separate window; it mirrors this state and sends its
+// button presses back as 'tray-action' events.
+function publishState() {
+  if (!isDesktop || !tauri.event) return;
+  const micro = settings.mode === 'micro';
+  const onBreak = timer.phase === 'break' && !micro;
+  const r = rhythm();
+  const running = timer.started && !timer.paused;
+  let endsAt = '';
+  if (running) {
+    const at = clockTime(Date.now() + timer.remaining * 1000);
+    endsAt = micro ? `Next pause at ${at}` : onBreak ? `Back to focus at ${at}` : `Break at ${at}`;
+  }
+  let label = micro ? 'until your next breathing pause' : onBreak ? 'left in your break' : `until your ${r.rest}-minute break`;
+  if (!timer.started) label = micro ? `A breathing reminder every ${r.work} minutes` : `${r.work} min focus, then a ${r.rest}-minute break`;
+  else if (timer.snoozeUntil) label = `Snoozed until ${clockTime(timer.snoozeUntil)}`;
+  else if (timer.hoursPaused) label = 'Outside working hours';
+  else if (timer.paused) label = 'Paused';
 
-let currentPhaseIdx = 0;
-flowerEl.addEventListener('animationiteration', (e) => {
-  if (e.target !== flowerEl) return; // ignore bubbling from the circles
-  currentPhaseIdx = (currentPhaseIdx + 1) % phases.length;
-  guidePhaseEl.style.opacity = '0';
-  guideSubtextEl.style.opacity = '0';
+  tauri.event.emit('timer-state', {
+    phase: onBreak ? 'break' : 'work',
+    micro,
+    started: timer.started,
+    paused: timer.paused,
+    status: !timer.started ? 'Ready' : onBreak ? 'Break time' : MODES[settings.mode].status,
+    time: formatTime(timer.remaining),
+    share: timer.started ? 1 - timer.remaining / timer.total : 0,
+    label,
+    endsAt,
+    goal: dailyGoal(),
+    done: today.sessions
+  }).catch(() => {});
+}
 
+function render() {
+  app.dataset.phase = timer.phase === 'break' && settings.mode !== 'micro' ? 'break' : 'work';
+  el.modeTabs.forEach((t) => t.setAttribute('aria-pressed', String(t.dataset.mode === settings.mode)));
+  renderCounter();
+  renderFocus();
+  renderBreak();
+  renderTooltip();
+  publishState();
+}
+
+/* =========================================================================
+   Views
+   ========================================================================= */
+
+function showView(next) {
+  if (next === view) return;
+  if (next === 'settings' || next === 'breath') returnView = view === 'settings' || view === 'breath' ? returnView : view;
+  if (view === 'breath') stopBreathSession();
+  view = next;
+  app.dataset.view = next;
+  Object.entries(el.views).forEach(([name, node]) => { node.hidden = name !== next; });
+  if (next === 'break') startBreakBreather(); else stopBreakBreather();
+  if (next === 'settings') syncSettingsForm();
+}
+
+function leaveOverlay() {
+  // Back from Settings or Take a breath: go to whatever fits the current phase
+  showView(timer.phase === 'break' && settings.mode !== 'micro' ? 'break' : 'focus');
+  render();
+}
+
+/* =========================================================================
+   Flower breathing
+   ========================================================================= */
+
+function flowerIn(viewEl) { return viewEl.querySelector('[data-flower]'); }
+
+function setFlower(flower, open, seconds) {
+  flower.style.setProperty('--dur', `${seconds}s`);
+  flower.classList.toggle('open', open);
+}
+
+function swapText(node, text) {
+  if (node.textContent === text) return;
+  node.classList.add('fade');
+  setTimeout(() => { node.textContent = text; node.classList.remove('fade'); }, 250);
+}
+
+// Break: a slow, steady 5.5 s in / 5.5 s out
+let breakBreatherTimer = null;
+function startBreakBreather() {
+  stopBreakBreather();
+  const flower = flowerIn(el.views.break);
+  let inhale = true;
+  const step = () => {
+    setFlower(flower, inhale, 5.5);
+    swapText(el.breakCue, inhale ? 'Breathe in, slowly' : 'Breathe out, let go');
+    inhale = !inhale;
+    breakBreatherTimer = setTimeout(step, 5500);
+  };
+  step();
+}
+function stopBreakBreather() {
+  clearTimeout(breakBreatherTimer);
+  breakBreatherTimer = null;
+}
+
+let breakIdeaIndex = Math.floor(Math.random() * BREAK_IDEAS.length);
+function pickBreakIdea() {
+  breakIdeaIndex = (breakIdeaIndex + 1) % BREAK_IDEAS.length;
+  el.breakIdea.textContent = BREAK_IDEAS[breakIdeaIndex];
+}
+
+// Take a breath: guided session following the chosen pattern
+let breathToken = 0;
+let breathTimers = [];
+
+function renderPatternButtons() {
+  document.querySelectorAll('.pattern').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pattern === settings.pattern)));
+}
+
+function renderSteps(pattern, activeIndex = -1) {
+  el.breathSteps.innerHTML = pattern.steps
+    .map(([kind, secs], i) => `<li class="${i === activeIndex ? 'active' : ''}">${STEP_TEXT[kind][2]} ${secs}</li>`)
+    .join('');
+}
+
+function stopBreathSession() {
+  breathToken += 1;
+  breathTimers.forEach(clearTimeout);
+  breathTimers = [];
+}
+
+function startBreathSession() {
+  stopBreathSession();
+  const token = breathToken;
+  const pattern = PATTERNS[settings.pattern] || PATTERNS.box;
+  const flower = flowerIn(el.views.breath);
+  const cycle = pattern.steps.reduce((sum, [, s]) => sum + s, 0);
+  const total = cycle * pattern.breaths;
+  const intro = 2;
+  const later = (fn, secs) => breathTimers.push(setTimeout(() => { if (token === breathToken) fn(); }, secs * 1000));
+
+  renderPatternButtons();
+  renderSteps(pattern);
+  setFlower(flower, false, 0.6);
+  el.endBreathBtn.querySelector('span').textContent = 'End early';
+  el.breathCount.textContent = 'Take a breath';
+  el.breathCue.textContent = 'Get comfortable';
+  el.breathSub.textContent = 'Sit back and relax your shoulders';
+  el.breathBar.style.transition = 'none';
+  el.breathBar.style.width = '0%';
+
+  let t = intro;
+  for (let b = 0; b < pattern.breaths; b++) {
+    pattern.steps.forEach(([kind, secs], i) => {
+      const startAt = t;
+      later(() => {
+        const [title, sub] = STEP_TEXT[kind];
+        el.breathCount.textContent = `Take a breath · Breath ${b + 1} of ${pattern.breaths}`;
+        swapText(el.breathCue, title);
+        el.breathSub.textContent = sub;
+        renderSteps(pattern, i);
+        if (kind === 'in') setFlower(flower, true, secs);
+        if (kind === 'out') setFlower(flower, false, secs);
+        el.breathBar.style.transition = `width ${secs}s linear`;
+        el.breathBar.style.width = `${(((startAt - intro) + secs) / total * 100).toFixed(1)}%`;
+      }, startAt);
+      t += secs;
+    });
+  }
+
+  later(() => {
+    swapText(el.breathCue, 'Nicely done');
+    el.breathSub.textContent = 'Carry that calm back into your work';
+    el.breathCount.textContent = 'Take a breath · Complete';
+    renderSteps(pattern);
+    el.endBreathBtn.querySelector('span').textContent = 'Back';
+    setFlower(flower, false, 2);
+  }, t);
+  later(() => { if (view === 'breath') leaveOverlay(); }, t + 4);
+}
+
+function openBreath() {
+  showView('breath');
+  startBreathSession();
+}
+
+/* =========================================================================
+   Tips on the focus screen
+   ========================================================================= */
+
+let tipIndex = 0;
+setInterval(() => {
+  if (view !== 'focus' || !settings.showTips) return;
+  tipIndex = (tipIndex + 1) % TIPS.length;
+  el.tipCard.classList.add('fade');
   setTimeout(() => {
-    guidePhaseEl.textContent = phases[currentPhaseIdx].text;
-    guideSubtextEl.textContent = phases[currentPhaseIdx].subtext;
-    guidePhaseEl.style.opacity = '1';
-    guideSubtextEl.style.opacity = '1';
-  }, 250);
-});
+    el.tipLabel.textContent = TIPS[tipIndex][0];
+    el.tipText.textContent = TIPS[tipIndex][1];
+    el.tipCard.classList.remove('fade');
+  }, 300);
+}, 15000);
 
-// Segmented controls: one thumb per control that slides under the active segment
-function syncThumb(group, animate = true) {
-  const thumb = group.querySelector('.segmented-thumb');
-  const active = group.querySelector('button.active');
-  if (!thumb || !active) return;
-  if (!animate) group.classList.add('no-anim');
-  thumb.style.width = `${active.offsetWidth}px`;
-  thumb.style.transform = `translateX(${active.offsetLeft}px)`;
-  if (!animate) {
-    void thumb.offsetWidth; // commit position before re-enabling transitions
-    group.classList.remove('no-anim');
+/* =========================================================================
+   Settings form
+   ========================================================================= */
+
+const settingInputs = document.querySelectorAll('[data-setting]');
+
+function formatOut(key, value) {
+  if (key === 'goalManual') return `${value} ${value === 1 ? 'session' : 'sessions'}`;
+  return `${value} min`;
+}
+
+function syncSettingsForm() {
+  settingInputs.forEach((input) => {
+    const key = input.dataset.setting;
+    if (input.type === 'checkbox') input.checked = Boolean(settings[key]);
+    else input.value = String(settings[key]);
+  });
+  document.querySelectorAll('input[name="goalMode"]').forEach((r) => { r.checked = r.value === settings.goalMode; });
+  document.querySelectorAll('[data-out]').forEach((o) => { o.textContent = formatOut(o.dataset.out, settings[o.dataset.out]); });
+  const r = settings.mode === 'micro' ? rhythm('deep') : rhythm();
+  const hours = workdayMinutes() / 60;
+  const modeName = settings.mode === 'micro' ? 'Deep Work' : MODES[settings.mode].label;
+  $('goalAutoSub').textContent =
+    `${settings.workStart} – ${settings.workEnd} (${+hours.toFixed(1)} h) with ${modeName} (${r.work}/${r.rest}) comes to about ${autoGoal()} sessions a day`;
+}
+
+async function applyLaunchAtLogin(enabled) {
+  const sub = $('autostartSub');
+  try {
+    await invoke(enabled ? 'plugin:autostart|enable' : 'plugin:autostart|disable');
+    sub.textContent = 'Keeps your rhythm going without opening the app';
+    sub.classList.remove('error');
+  } catch (e) {
+    settings.launchAtLogin = !enabled;
+    saveSettings();
+    syncSettingsForm();
+    sub.textContent = isDesktop ? `Couldn't change this: ${e}` : 'Available in the desktop app';
+    sub.classList.add('error');
   }
 }
 
-document.querySelectorAll('.segmented').forEach(group => {
-  const thumb = document.createElement('span');
-  thumb.className = 'segmented-thumb';
-  thumb.setAttribute('aria-hidden', 'true');
-  group.prepend(thumb);
-  // Also covers the first layout and un-hiding the Micro-Pause interval group
-  new ResizeObserver(() => syncThumb(group, false)).observe(group);
+function applyCloseBehavior() {
+  invoke('set_close_to_tray', { enabled: settings.closeBehavior !== 'quit' }).catch(() => {});
+}
+
+function onSettingChanged(key) {
+  if (key === 'launchAtLogin') applyLaunchAtLogin(settings.launchAtLogin);
+  if (key === 'closeBehavior') applyCloseBehavior();
+  if (key === 'pattern') renderPatternButtons();
+  if (['customFocus', 'customBreak', 'microMinutes'].includes(key) && settings.mode === (key === 'microMinutes' ? 'micro' : 'custom')) {
+    // Changing the active rhythm restarts the current phase with the new length
+    if (!timer.started || timer.phase === 'work') resetPhase('work');
+  }
+  syncSettingsForm();
+  render();
+}
+
+settingInputs.forEach((input) => {
+  input.addEventListener('change', () => {
+    const key = input.dataset.setting;
+    let value;
+    if (input.type === 'checkbox') value = input.checked;
+    else if (input.type === 'range') value = Number(input.value);
+    else if (key === 'microMinutes') value = Number(input.value);
+    else value = input.value;
+    settings[key] = value;
+    saveSettings();
+    onSettingChanged(key);
+  });
 });
 
-// Event Listeners
-modeTabs.forEach(tab => {
+document.querySelectorAll('input[name="goalMode"]').forEach((radio) => {
+  radio.addEventListener('change', () => {
+    settings.goalMode = radio.value;
+    today.celebrated = today.sessions >= dailyGoal() && dailyGoal() > 0;
+    saveSettings();
+    saveToday();
+    onSettingChanged('goalMode');
+  });
+});
+
+const STEP_LIMITS = { customFocus: [5, 180], customBreak: [1, 60], goalManual: [1, 24] };
+document.querySelectorAll('[data-step]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const key = btn.dataset.step;
+    const [min, max] = STEP_LIMITS[key];
+    settings[key] = Math.min(max, Math.max(min, settings[key] + Number(btn.dataset.delta)));
+    if (key === 'goalManual') settings.goalMode = 'manual';
+    saveSettings();
+    onSettingChanged(key);
+  });
+});
+
+document.querySelectorAll('.nav-item').forEach((item) => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach((n) => n.removeAttribute('aria-current'));
+    item.setAttribute('aria-current', 'page');
+    document.querySelectorAll('.settings-section').forEach((s) => { s.hidden = s.dataset.panel !== item.dataset.section; });
+  });
+});
+
+function openSettings(section) {
+  showView('settings');
+  if (section) document.querySelector(`.nav-item[data-section="${section}"]`)?.click();
+}
+
+$('testNotifyBtn').addEventListener('click', async () => {
+  const result = $('testResult');
+  const error = await notify('🌿 Breathe test', `Reminders are working. Current rhythm: ${MODES[settings.mode].label}.`, { force: true });
+  result.textContent = error || `Last test sent at ${clockTime(Date.now())}. Didn't see it? Check the tips below.`;
+  result.classList.toggle('error', Boolean(error));
+  result.classList.toggle('ok', !error);
+});
+
+document.querySelectorAll('[data-preview]').forEach((b) => b.addEventListener('click', () => playChime(b.dataset.preview, true)));
+
+$('resetSettingsBtn').addEventListener('click', () => {
+  Object.assign(settings, DEFAULTS);
+  saveSettings();
+  applyLaunchAtLogin(false);
+  applyCloseBehavior();
+  resetPhase('work');
+  syncSettingsForm();
+  render();
+  toast('Settings reset');
+});
+
+$('repoLink').addEventListener('click', (e) => {
+  if (!isDesktop) return;
+  e.preventDefault();
+  invoke('plugin:opener|open_url', { url: e.currentTarget.href }).catch(() => {});
+});
+
+/* =========================================================================
+   Main controls
+   ========================================================================= */
+
+el.modeTabs.forEach((tab) => {
   tab.addEventListener('click', () => {
-    modeTabs.forEach(t => {
-      t.classList.toggle('active', t === tab);
-      t.setAttribute('aria-pressed', t === tab);
-    });
-    syncThumb(tab.parentElement);
-    applyMode(tab.dataset.mode);
+    if (tab.dataset.mode === settings.mode) return;
+    settings.mode = tab.dataset.mode;
+    saveSettings();
+    resetPhase('work');
+    if (view === 'break') showView('focus');
+    render();
   });
 });
 
-chips.forEach(chip => {
-  chip.addEventListener('click', () => {
-    chips.forEach(c => {
-      c.classList.toggle('active', c === chip);
-      c.setAttribute('aria-pressed', c === chip);
-    });
-    syncThumb(chip.parentElement);
+el.pauseBtn.addEventListener('click', () => {
+  if (!timer.started) openBreath();
+  else setPaused(!timer.paused);
+});
 
-    microMinutes = parseInt(chip.dataset.minutes, 10);
-    remainingSeconds = microMinutes * 60;
-    renderTime();
+el.primaryBtn.addEventListener('click', () => {
+  if (!timer.started) startDay();
+  else openBreath();
+});
+
+el.breakNowBtn.addEventListener('click', () => beginBreak({ early: true }));
+$('extendBreakBtn').addEventListener('click', () => {
+  timer.remaining += 300;
+  timer.total += 300;
+  toast('Break extended by 5 minutes');
+  render();
+});
+$('endBreakBtn').addEventListener('click', () => beginFocus({ fromUser: true }));
+el.endBreathBtn.addEventListener('click', leaveOverlay);
+document.querySelectorAll('.pattern').forEach((b) => b.addEventListener('click', () => {
+  settings.pattern = b.dataset.pattern;
+  saveSettings();
+  startBreathSession();
+}));
+
+$('openSettings').addEventListener('click', () => openSettings());
+$('closeSettings').addEventListener('click', leaveOverlay);
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && (view === 'settings' || view === 'breath')) leaveOverlay();
+});
+
+document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
+
+/* =========================================================================
+   Desktop integration: tray menu, notification button, autostart, version
+   ========================================================================= */
+
+if (isDesktop && tauri.event) {
+  tauri.event.listen('trigger-breathe-now', () => openBreath());
+  tauri.event.listen('tray-request-state', () => publishState());
+  tauri.event.listen('popover-opened', () => publishState());
+  tauri.event.listen('tray-action', ({ payload }) => {
+    switch (payload) {
+      case 'breathe': openBreath(); break;
+      case 'start': if (!timer.started) startDay(); break;
+      case 'toggle-pause': timer.started ? setPaused(!timer.paused) : startDay(); break;
+      case 'break-now':
+        if (settings.mode !== 'micro' && timer.phase === 'work') beginBreak({ early: true });
+        break;
+      case 'snooze-15': snooze(15); break;
+      case 'snooze-30': snooze(30); break;
+      case 'snooze-60': snooze(60); break;
+      case 'settings': openSettings(); break;
+      default: break;
+    }
   });
-});
 
-toggleBtn.addEventListener('click', togglePause);
+  invoke('plugin:autostart|is_enabled')
+    .then((enabled) => {
+      settings.launchAtLogin = Boolean(enabled);
+      saveSettings();
+      syncSettingsForm();
+    })
+    .catch(() => {});
 
-skipPhaseBtn.addEventListener('click', () => {
-  transitionPhase();
-  renderTime();
-});
-
-breatheNowBtn.addEventListener('click', () => {
-  playChime('bell');
-  const originalText = breatheNowBtn.querySelector('span').textContent;
-  breatheNowBtn.querySelector('span').textContent = 'Breathe in rhythm…';
-  setTimeout(() => {
-    breatheNowBtn.querySelector('span').textContent = originalText;
-  }, 4000);
-});
-
-const notifyStatusEl = document.getElementById('notifyStatus');
-
-testNotifyBtn.addEventListener('click', async () => {
-  const error = await triggerNotification(
-    '🌿 Breathe Reminder',
-    'Notifications are active! Current rhythm: ' + document.querySelector('.mode-tab.active').textContent
-  );
-  notifyStatusEl.textContent = error || 'Test notification sent.';
-  notifyStatusEl.classList.toggle('error', Boolean(error));
-  notifyStatusEl.hidden = false;
-});
-
-soundToggle.addEventListener('change', (e) => {
-  soundEnabled = e.target.checked;
-  if (soundEnabled) playChime('bell');
-});
-
-// Listen for Tauri events (when user clicks "🌸 Breathe Now" inside the Windows toast notification)
-if (window.__TAURI__ && window.__TAURI__.event) {
-  window.__TAURI__.event.listen('trigger-breathe-now', () => {
-    breatheNowBtn.click();
-  });
+  tauri.app?.getVersion?.().then((v) => { $('appVersion').textContent = v; }).catch(() => {});
+  applyCloseBehavior();
 }
 
-// Initialize
-applyMode('50-10');
-startTimer();
+/* =========================================================================
+   Start
+   ========================================================================= */
+
+resetPhase('work');
+timer.started = settings.autoStart;
+el.breakIdea.textContent = BREAK_IDEAS[breakIdeaIndex];
+renderPatternButtons();
+syncSettingsForm();
+render();
+setInterval(tick, 1000);

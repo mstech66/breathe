@@ -18,6 +18,23 @@
         "minHeight": 560,
         "center": true,
         "backgroundThrottling": "disabled"
+      },
+      {
+        "label": "tray",
+        "title": "Breathe",
+        "url": "tray.html",
+        "width": 340,
+        "height": 404,
+        "visible": false,
+        "decorations": false,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "focus": true,
+        "shadow": true,
+        "backgroundThrottling": "disabled"
       }
     ],
     "security": {
@@ -36,6 +53,9 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
+    ],
+    "resources": [
+      "icons/128x128.png"
     ]
   }
 }

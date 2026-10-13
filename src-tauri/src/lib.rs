@@ -1,8 +1,146 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
 use tauri::{
-    menu::{Menu, MenuItem, PredefinedMenuItem},
+    menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, WindowEvent,
+    AppHandle, Emitter, Manager, PhysicalPosition, WindowEvent,
 };
+
+const TRAY_ID: &str = "main";
+const POPOVER: &str = "tray";
+
+/// Whether closing the window hides Breathe to the tray (true) or quits (false).
+/// The frontend sets this from the "When I close the window" setting.
+struct CloseToTray(AtomicBool);
+
+/// When the popover last hid itself after losing focus. Clicking the tray icon
+/// while the popover is open first blurs it (hiding it), then delivers the click;
+/// this lets that click close the popover instead of reopening it.
+struct PopoverHiddenAt(Mutex<Option<Instant>>);
+
+fn show_main_window(app: &AppHandle) {
+    hide_popover(app);
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
+fn hide_popover(app: &AppHandle) {
+    if let Some(popover) = app.get_webview_window(POPOVER) {
+        let _ = popover.hide();
+    }
+}
+
+/// Tray icon click: open the popover, or close it if it's already open.
+fn toggle_popover(app: &AppHandle, click: PhysicalPosition<f64>) {
+    let Some(popover) = app.get_webview_window(POPOVER) else { return };
+
+    if popover.is_visible().unwrap_or(false) {
+        let _ = popover.hide();
+        return;
+    }
+    let just_hidden = app
+        .state::<PopoverHiddenAt>()
+        .0
+        .lock()
+        .map(|t| t.map_or(false, |at| at.elapsed() < Duration::from_millis(300)))
+        .unwrap_or(false);
+    if just_hidden {
+        return;
+    }
+    show_popover_at(app, click);
+}
+
+/// Main window closed to the tray: open the popover by the tray icon so it's
+/// clear Breathe is still running and where to find it.
+fn show_popover_at_tray(app: &AppHandle) {
+    let anchor = app
+        .tray_by_id(TRAY_ID)
+        .and_then(|tray| tray.rect().ok().flatten())
+        .map(|rect| {
+            let scale = app
+                .primary_monitor()
+                .ok()
+                .flatten()
+                .map_or(1.0, |m| m.scale_factor());
+            let pos = rect.position.to_physical::<f64>(scale);
+            let size = rect.size.to_physical::<f64>(scale);
+            PhysicalPosition::new(pos.x + size.width / 2.0, pos.y + size.height / 2.0)
+        })
+        .or_else(|| {
+            // No icon position on this platform: use the bottom-right corner
+            let monitor = app.primary_monitor().ok().flatten()?;
+            let area = monitor.work_area();
+            Some(PhysicalPosition::new(
+                (area.position.x + area.size.width as i32) as f64 - 40.0,
+                (area.position.y + area.size.height as i32) as f64,
+            ))
+        });
+    if let Some(point) = anchor {
+        show_popover_at(app, point);
+    }
+}
+
+/// Opens the popover just above the given point (or below it when the taskbar or
+/// menu bar is at the top of the screen), kept inside the screen's work area.
+fn show_popover_at(app: &AppHandle, click: PhysicalPosition<f64>) {
+    let Some(popover) = app.get_webview_window(POPOVER) else { return };
+
+    let size = popover.outer_size().unwrap_or(tauri::PhysicalSize::new(340, 404));
+    let (w, h) = (size.width as f64, size.height as f64);
+    let monitor = app
+        .monitor_from_point(click.x, click.y)
+        .ok()
+        .flatten()
+        .or_else(|| app.primary_monitor().ok().flatten());
+
+    let gap = 12.0;
+    let (mut x, mut y) = (click.x - w / 2.0, click.y - h - gap);
+    if let Some(monitor) = monitor {
+        let area = monitor.work_area();
+        let (left, top) = (area.position.x as f64, area.position.y as f64);
+        let (right, bottom) = (left + area.size.width as f64, top + area.size.height as f64);
+        if click.y < top + (bottom - top) / 2.0 {
+            y = top + gap; // taskbar / menu bar at the top
+        } else {
+            y = bottom - h - gap;
+        }
+        x = x.clamp(left + gap, (right - w - gap).max(left + gap));
+    }
+
+    let _ = popover.set_position(PhysicalPosition::new(x.round() as i32, y.round() as i32));
+    let _ = popover.show();
+    let _ = popover.set_focus();
+    let _ = app.emit("popover-opened", ());
+}
+
+/// Called by buttons in the tray popover; same actions as the tray menu.
+#[tauri::command]
+fn tray_action(app: AppHandle, action: String) {
+    run_tray_action(&app, &action);
+}
+
+fn run_tray_action(app: &AppHandle, action: &str) {
+    match action {
+        "show" => show_main_window(app),
+        "hide" => hide_popover(app),
+        "quit" => app.exit(0),
+        // Actions that need the main window open
+        "breathe" | "settings" => {
+            show_main_window(app);
+            let _ = app.emit("tray-action", action);
+        }
+        // Actions that work quietly in the background
+        "toggle-pause" | "break-now" | "start" | "snooze-15" | "snooze-30" | "snooze-60" => {
+            let _ = app.emit("tray-action", action);
+        }
+        _ => {}
+    }
+}
 
 /// Shows a system notification. Errors are returned to the frontend so failures
 /// are visible instead of silently dropped.
@@ -14,8 +152,7 @@ async fn trigger_native_toast(
 ) -> Result<(), String> {
     #[cfg(windows)]
     {
-        use std::path::PathBuf;
-        use tauri::Emitter;
+        use tauri::path::BaseDirectory;
         use tauri_winrt_notification::{IconCrop, Scenario, Sound, Toast};
         let app_handle = app.clone();
         let mut toast = Toast::new("com.breathe.desktop");
@@ -26,18 +163,16 @@ async fn trigger_native_toast(
             .add_button("🌸 Breathe Now", "breathe_now")
             .sound(Some(Sound::Reminder));
 
-        let icon_path = PathBuf::from(r"D:\Projects\breathe\src-tauri\icons\128x128.png");
-        if icon_path.exists() {
-            toast = toast.icon(&icon_path, IconCrop::Circular, "Breathe");
+        // Bundled with the app (see bundle.resources in tauri.conf.json)
+        if let Ok(icon_path) = app.path().resolve("icons/128x128.png", BaseDirectory::Resource) {
+            if icon_path.exists() {
+                toast = toast.icon(&icon_path, IconCrop::Circular, "Breathe");
+            }
         }
 
         toast
             .on_activated(move |action| {
-                if let Some(window) = app_handle.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.unminimize();
-                    let _ = window.set_focus();
-                }
+                show_main_window(&app_handle);
                 if let Some(act) = action {
                     if act == "breathe_now" {
                         let _ = app_handle.emit("trigger-breathe-now", ());
@@ -85,12 +220,37 @@ async fn trigger_native_toast(
     Ok(())
 }
 
+/// Keeps the tray tooltip in step with the timer ("Breathe · break in 12 min").
+#[tauri::command]
+fn set_tray_tooltip(app: AppHandle, text: String) -> Result<(), String> {
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        tray.set_tooltip(Some(text)).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn set_close_to_tray(state: tauri::State<'_, CloseToTray>, enabled: bool) {
+    state.0.store(enabled, Ordering::Relaxed);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![trigger_native_toast])
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
+        .manage(CloseToTray(AtomicBool::new(true)))
+        .manage(PopoverHiddenAt(Mutex::new(None)))
+        .invoke_handler(tauri::generate_handler![
+            trigger_native_toast,
+            set_tray_tooltip,
+            set_close_to_tray,
+            tray_action
+        ])
         .setup(|app| {
             // UNUserNotificationCenter shows nothing until the user grants permission,
             // so ask once at launch (macOS only prompts the first time).
@@ -100,52 +260,87 @@ pub fn run() {
                 let _ = notify_rust::request_auth().await;
             });
 
-            let show_item = MenuItem::with_id(app, "show", "Open Breathe", true, None::<&str>)?;
-            let sep = PredefinedMenuItem::separator(app)?;
-            let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show_item, &sep, &quit_item])?;
+            let open_item = MenuItem::with_id(app, "show", "Open Breathe", true, None::<&str>)?;
+            let breathe_item = MenuItem::with_id(app, "breathe", "Take a breath", true, None::<&str>)?;
+            let pause_item = MenuItem::with_id(app, "toggle-pause", "Pause / resume", true, None::<&str>)?;
+            let break_item = MenuItem::with_id(app, "break-now", "Start break now", true, None::<&str>)?;
+            let snooze_menu = Submenu::with_items(
+                app,
+                "Snooze reminders",
+                true,
+                &[
+                    &MenuItem::with_id(app, "snooze-15", "15 minutes", true, None::<&str>)?,
+                    &MenuItem::with_id(app, "snooze-30", "30 minutes", true, None::<&str>)?,
+                    &MenuItem::with_id(app, "snooze-60", "1 hour", true, None::<&str>)?,
+                ],
+            )?;
+            let settings_item = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "Quit Breathe", true, None::<&str>)?;
+            let menu = Menu::with_items(
+                app,
+                &[
+                    &open_item,
+                    &PredefinedMenuItem::separator(app)?,
+                    &breathe_item,
+                    &pause_item,
+                    &break_item,
+                    &snooze_menu,
+                    &PredefinedMenuItem::separator(app)?,
+                    &settings_item,
+                    &quit_item,
+                ],
+            )?;
 
-            let _tray = TrayIconBuilder::new()
+            let _tray = TrayIconBuilder::with_id(TRAY_ID)
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
                 .show_menu_on_left_click(false)
-                .tooltip("Breathe - Mindful Reminders")
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.unminimize();
-                            let _ = window.set_focus();
-                        }
-                    }
-                    "quit" => {
-                        app.exit(0);
-                    }
-                    _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
+                .tooltip("Breathe")
+                .on_menu_event(|app, event| run_tray_action(app, event.id.as_ref()))
+                .on_tray_icon_event(|tray, event| match event {
+                    // Left click: the quick popover. Right click: the menu.
+                    TrayIconEvent::Click {
                         button: MouseButton::Left,
                         button_state: MouseButtonState::Up,
+                        position,
                         ..
-                    } = event
-                    {
-                        let app = tray.app_handle();
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.unminimize();
-                            let _ = window.set_focus();
-                        }
-                    }
+                    } => toggle_popover(tray.app_handle(), position),
+                    TrayIconEvent::DoubleClick { .. } => show_main_window(tray.app_handle()),
+                    _ => {}
                 })
                 .build(app)?;
 
             Ok(())
         })
         .on_window_event(|window, event| {
+            if window.label() == POPOVER {
+                match event {
+                    WindowEvent::Focused(false) => {
+                        let _ = window.hide();
+                        if let Ok(mut at) = window.state::<PopoverHiddenAt>().0.lock() {
+                            *at = Some(Instant::now());
+                        }
+                    }
+                    WindowEvent::CloseRequested { api, .. } => {
+                        let _ = window.hide();
+                        api.prevent_close();
+                    }
+                    _ => {}
+                }
+                return;
+            }
             if let WindowEvent::CloseRequested { api, .. } = event {
-                let _ = window.hide();
-                api.prevent_close();
+                let to_tray = window
+                    .state::<CloseToTray>()
+                    .0
+                    .load(Ordering::Relaxed);
+                if to_tray {
+                    let _ = window.hide();
+                    api.prevent_close();
+                    show_popover_at_tray(window.app_handle());
+                } else {
+                    window.app_handle().exit(0);
+                }
             }
         })
         .run(tauri::generate_context!())
