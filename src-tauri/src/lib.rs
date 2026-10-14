@@ -155,7 +155,12 @@ async fn trigger_native_toast(
         use tauri::path::BaseDirectory;
         use tauri_winrt_notification::{IconCrop, Scenario, Sound, Toast};
         let app_handle = app.clone();
-        let mut toast = Toast::new("com.breathe.desktop");
+        // Installer builds register "com.breathe.desktop" through their Start menu
+        // shortcut. A Microsoft Store (MSIX) install must use its package identity.
+        let app_id = store_package_family()
+            .map(|family| format!("{family}!App"))
+            .unwrap_or_else(|| "com.breathe.desktop".to_string());
+        let mut toast = Toast::new(&app_id);
         toast = toast
             .title(&title)
             .text1(&body)
@@ -234,6 +239,69 @@ fn set_close_to_tray(state: tauri::State<'_, CloseToTray>, enabled: bool) {
     state.0.store(enabled, Ordering::Relaxed);
 }
 
+/// Package family name when running as a Microsoft Store (MSIX) install, else None.
+///
+/// Store apps run from `...\WindowsApps\<PackageFullName>\`, where the full name is
+/// `Name_Version_Arch_ResourceId_PublisherId`. The family name is `Name_PublisherId`.
+/// Package names can't contain underscores, so splitting on `_` is safe.
+fn store_package_family() -> Option<String> {
+    if !cfg!(windows) {
+        return None;
+    }
+    let exe = std::env::current_exe().ok()?;
+    package_family_from_path(&exe)
+}
+
+fn package_family_from_path(exe: &std::path::Path) -> Option<String> {
+    let mut parts = exe.components().map(|c| c.as_os_str().to_string_lossy().to_string());
+    parts.find(|p| p.eq_ignore_ascii_case("WindowsApps"))?;
+    let full_name = parts.next()?;
+    let pieces: Vec<&str> = full_name.split('_').collect();
+    if pieces.len() != 5 || pieces[0].is_empty() || pieces[4].is_empty() {
+        return None;
+    }
+    Some(format!("{}_{}", pieces[0], pieces[4]))
+}
+
+/// Tells the frontend whether this is the Microsoft Store build. Store builds can't
+/// use the launch-at-login plugin (Windows manages it under Settings → Apps → Startup).
+#[tauri::command]
+fn is_store_package() -> bool {
+    store_package_family().is_some()
+}
+
+/// Opens Windows Settings → Apps → Startup, where Store apps are switched on at login.
+#[tauri::command]
+fn open_startup_settings() -> Result<(), String> {
+    tauri_plugin_opener::open_url("ms-settings:startupapps", None::<&str>).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::package_family_from_path;
+    use std::path::Path;
+
+    #[test]
+    fn reads_family_name_from_store_install_path() {
+        let p = Path::new(r"C:\Program Files\WindowsApps\12345Manthan.Breathe_1.1.0.0_x64__abcd1234efgh5\Breathe.exe");
+        // On Linux the backslashes aren't separators, so test with forward slashes too.
+        let q = Path::new("/Program Files/WindowsApps/12345Manthan.Breathe_1.1.0.0_x64__abcd1234efgh5/Breathe.exe");
+        for path in [p, q] {
+            if let Some(family) = package_family_from_path(path) {
+                assert_eq!(family, "12345Manthan.Breathe_abcd1234efgh5");
+                return;
+            }
+        }
+        panic!("no family name parsed");
+    }
+
+    #[test]
+    fn ignores_normal_installs() {
+        let p = Path::new("/Program Files/Breathe/Breathe.exe");
+        assert_eq!(package_family_from_path(p), None);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -249,7 +317,9 @@ pub fn run() {
             trigger_native_toast,
             set_tray_tooltip,
             set_close_to_tray,
-            tray_action
+            tray_action,
+            is_store_package,
+            open_startup_settings
         ])
         .setup(|app| {
             // UNUserNotificationCenter shows nothing until the user grants permission,

@@ -904,13 +904,28 @@ if (isDesktop && tauri.event) {
     }
   });
 
-  invoke('plugin:autostart|is_enabled')
-    .then((enabled) => {
-      settings.launchAtLogin = Boolean(enabled);
-      saveSettings();
-      syncSettingsForm();
+  invoke('is_store_package')
+    .then((isStore) => {
+      if (isStore) {
+        // Microsoft Store builds: Windows manages launch at login (Settings → Apps → Startup)
+        const toggle = document.querySelector('[data-setting="launchAtLogin"]');
+        toggle.hidden = true;
+        $('startupSettingsBtn').hidden = false;
+        $('autostartSub').textContent = 'Turn Breathe on in Windows Settings → Apps → Startup';
+        return;
+      }
+      return invoke('plugin:autostart|is_enabled').then((enabled) => {
+        settings.launchAtLogin = Boolean(enabled);
+        saveSettings();
+        syncSettingsForm();
+      });
     })
     .catch(() => {});
+
+  $('startupSettingsBtn').addEventListener('click', (e) => {
+    e.preventDefault();
+    invoke('open_startup_settings').catch((err) => toast(`Couldn't open Settings: ${err}`));
+  });
 
   tauri.app?.getVersion?.().then((v) => { $('appVersion').textContent = v; }).catch(() => {});
   applyCloseBehavior();

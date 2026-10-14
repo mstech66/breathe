@@ -51,3 +51,50 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+  # Microsoft Store package. Runs alongside the installer builds and attaches
+  # Breathe_<version>_x64.msix to the workflow run (Actions tab > this run > Artifacts).
+  # Upload that file in Partner Center; the Store signs it, so no certificate is needed.
+  #
+  # One-time setup: GitHub repo > Settings > Secrets and variables > Actions > Variables:
+  #   MSIX_IDENTITY_NAME            Partner Center > Product identity > Package/Identity/Name
+  #   MSIX_PUBLISHER                Partner Center > Product identity > Package/Identity/Publisher
+  #   MSIX_PUBLISHER_DISPLAY_NAME   Partner Center > Product identity > Package/Properties/PublisherDisplayName
+  #   MSIX_DISPLAY_NAME (optional)  The reserved Store name, if it isn't "Breathe"
+  msix:
+    runs-on: windows-latest
+    if: ${{ vars.MSIX_IDENTITY_NAME != '' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build the app (no installers)
+        run: npm run tauri build -- --no-bundle
+
+      - name: Package as MSIX
+        shell: pwsh
+        env:
+          MSIX_IDENTITY_NAME: ${{ vars.MSIX_IDENTITY_NAME }}
+          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+          MSIX_PUBLISHER_DISPLAY_NAME: ${{ vars.MSIX_PUBLISHER_DISPLAY_NAME }}
+          MSIX_DISPLAY_NAME: ${{ vars.MSIX_DISPLAY_NAME }}
+        run: ./msix/build-msix.ps1
+
+      - name: Upload MSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: breathe-microsoft-store-msix
+          path: dist-msix/*.msix
+          if-no-files-found: error

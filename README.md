@@ -200,6 +200,10 @@ Desktop-only features (notifications through the OS, the tray, launch at login) 
 
 Pushing a tag that starts with `v` (for example `v1.1.0`) runs the [release workflow](.github/workflows/release.yml), which builds Windows and macOS installers and publishes them as a GitHub release. Update `version` in `src-tauri/tauri.conf.json` first so the installers carry the right version.
 
+### Microsoft Store
+
+The same release workflow can also build an MSIX package for the Microsoft Store. The Store signs it, so no certificate is needed. See [store/README.md](store/README.md) for the one-time setup and submission steps. The listing text, screenshots and privacy policy are in [`store/`](store/) and [PRIVACY.md](PRIVACY.md).
+
 ## How it works
 
 ```

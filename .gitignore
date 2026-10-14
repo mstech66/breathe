@@ -25,3 +25,9 @@ dist-ssr
 src-tauri/target/
 target/
 .claude
+
+# Microsoft Store package output
+dist-msix
+
+# Store listing text (pasted into Partner Center, kept locally only)
+store/listing.md
