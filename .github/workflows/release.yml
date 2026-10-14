@@ -5,9 +5,15 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      msix_only:
+        description: 'Only build the Microsoft Store package (skip installers and the GitHub release)'
+        type: boolean
+        default: false
 
 jobs:
   release:
+    if: ${{ !inputs.msix_only }}
     permissions:
       contents: write
     strategy:
