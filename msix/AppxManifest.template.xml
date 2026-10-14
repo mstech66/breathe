@@ -34,8 +34,9 @@
 
   <Applications>
     <Application Id="App" Executable="Breathe.exe" EntryPoint="Windows.FullTrustApplication">
+      <!-- Start menu, search and taskbar name. Can be shorter than the Store name above. -->
       <uap:VisualElements
-        DisplayName="{{DISPLAY_NAME}}"
+        DisplayName="Breathe"
         Description="A calm work–rest rhythm with guided breathing breaks."
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"

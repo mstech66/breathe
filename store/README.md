@@ -45,7 +45,7 @@ In Partner Center → your app → **Start submission**:
 2. **Properties:** category and privacy policy URL (see `listing.md`).
 3. **Age ratings:** complete the questionnaire (no data collection, no user interaction, no purchases).
 4. **Packages:** upload the `.msix`.
-5. **Store listings:** copy the text from `listing.md`, upload the screenshots in `screenshots/` and `logo-300x300.png`.
+5. **Store listings:** copy the text from `listing.md`, upload the screenshots in `screenshots/`, `logo-300x300.png`, and one of the 2:3 poster art files under **Store logos → Poster art**. Upload `hero-art-3840x2160.png` separately under the 16:9 Super hero art field.
 6. **Submit to the Store.** Certification usually takes a few hours to 3 business days.
 
 Partner Center may flag the `runFullTrust` capability and ask why it's needed. Answer: _"Breathe is a desktop (Win32) app built with Tauri. It needs full trust to run its tray icon, show notifications and register a startup task."_
